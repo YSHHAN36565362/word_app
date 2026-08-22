@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useUserId } from "@/hooks/useUserId";
 import { useTheme } from "@/contexts/ThemeContext";
 import { isSyncEnabled } from "@/lib/progress";
@@ -10,9 +10,16 @@ export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
   const [input, setInput] = useState("");
   const [touched, setTouched] = useState(false);
+  const [syncEnabled, setSyncEnabled] = useState(false);
 
   const displayValue = touched ? input : userId;
-  const syncEnabled = isSyncEnabled();
+
+  useEffect(() => {
+    // Supabase 클라이언트는 브라우저에서만 만들어져야 하므로(서버/빌드 시 prerender에서
+    // 만들면 잘못된 URL 등으로 빌드가 깨질 수 있음) 마운트 후에만 확인한다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSyncEnabled(isSyncEnabled());
+  }, []);
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
