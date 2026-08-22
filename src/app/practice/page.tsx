@@ -1,0 +1,313 @@
+"use client";
+
+import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import FileSelector from "@/components/FileSelector";
+import ExitFocusButton from "@/components/ExitFocusButton";
+import ProgressBar from "@/components/ProgressBar";
+import FlashCard from "@/components/FlashCard";
+import Mascot, { MascotState } from "@/components/Mascot";
+import { useFocusMode } from "@/contexts/FocusModeContext";
+import { useUserId } from "@/hooks/useUserId";
+import { fetchRadicalWords, fetchWords } from "@/lib/api";
+import { getDisplaySide, requeuePosition, shuffle } from "@/lib/queue";
+import { appendStudyStat, deleteProgress, loadProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
+import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
+
+export default function PracticePage() {
+  return (
+    <Suspense fallback={null}>
+      <PracticePageInner />
+    </Suspense>
+  );
+}
+
+function PracticePageInner() {
+  const { focus, setFocus } = useFocusMode();
+  const { userId, ready } = useUserId();
+  const searchParams = useSearchParams();
+  const fromWrongNotes = searchParams.get("from") === "wrongnotes";
+
+  const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
+  const [starting, setStarting] = useState(false);
+  const [saved, setSaved] = useState<PracticeProgress | null>(null);
+
+  const [queue, setQueue] = useState<WordEntry[]>([]);
+  const [current, setCurrent] = useState<WordEntry | null>(null);
+  const [mode, setMode] = useState<StudyMode>("random");
+  const [displaySide, setDisplaySide] = useState<0 | 1>(0);
+  const [total, setTotal] = useState(0);
+  const [doneCount, setDoneCount] = useState(0);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [showHint, setShowHint] = useState(false);
+  const [isRadicals, setIsRadicals] = useState(false);
+  const [mascotState, setMascotState] = useState<MascotState>("idle");
+  const [resultSaved, setResultSaved] = useState(false);
+  const [filesLabel, setFilesLabel] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!ready || !userId) return;
+    loadProgress<PracticeProgress>(userId, "practice").then((p) => {
+      if (p && (p.queue?.length || p.currentWord)) setSaved(p);
+    });
+  }, [ready, userId]);
+
+  function persist(next: { queue: WordEntry[]; current: WordEntry | null; total: number; done: number; side: 0 | 1; m: StudyMode; radicals: boolean; labels: string[] }) {
+    if (!userId) return;
+    saveProgress(userId, "practice", {
+      filesLabel: next.labels,
+      mode: next.m,
+      queue: next.queue,
+      currentWord: next.current,
+      displaySide: next.side,
+      totalCount: next.total,
+      doneCount: next.done,
+      wordsAreRadicals: next.radicals,
+    } as PracticeProgress);
+  }
+
+  function startWithList(list: WordEntry[], selectedMode: StudyMode, radicals: boolean, labels: string[]) {
+    if (list.length === 0) return;
+    const pool = shuffle(list);
+    const q = [...pool];
+    const first = q.shift() ?? null;
+    const side = getDisplaySide(selectedMode);
+
+    setMode(selectedMode);
+    setIsRadicals(radicals);
+    setQueue(q);
+    setCurrent(first);
+    setTotal(pool.length);
+    setDoneCount(0);
+    setDisplaySide(side);
+    setShowAnswer(false);
+    setShowHint(false);
+    setResultSaved(false);
+    setMascotState("idle");
+    setFilesLabel(labels);
+    setFocus(true);
+
+    persist({ queue: q, current: first, total: pool.length, done: 0, side, m: selectedMode, radicals, labels });
+  }
+
+  async function begin(selectedMode: StudyMode, radicals: boolean) {
+    if (selectedFiles.length === 0) return;
+    setStarting(true);
+    const paths = selectedFiles.map((f) => f.path);
+    const list = radicals ? await fetchRadicalWords(paths) : await fetchWords(paths);
+    setStarting(false);
+    const labels = radicals ? selectedFiles.map((f) => `${f.label} (부수만)`) : selectedFiles.map((f) => f.label);
+    startWithList(list, selectedMode, radicals, labels);
+  }
+
+  async function beginFromWrongNotes() {
+    if (!userId) return;
+    setStarting(true);
+    const list = await loadWrongNotes(userId);
+    setStarting(false);
+    startWithList(list, "random", false, ["오답 노트"]);
+  }
+
+  function resume() {
+    if (!saved) return;
+    setMode(saved.mode);
+    setIsRadicals(saved.wordsAreRadicals);
+    setQueue(saved.queue);
+    setCurrent(saved.currentWord);
+    setTotal(saved.totalCount);
+    setDoneCount(saved.doneCount);
+    setDisplaySide(saved.displaySide);
+    setShowAnswer(false);
+    setShowHint(false);
+    setResultSaved(false);
+    setFilesLabel(saved.filesLabel);
+    setFocus(true);
+  }
+
+  function revealAnswer() {
+    setShowAnswer(true);
+    if (current?.hint.trim()) setShowHint(true);
+  }
+
+  function score(level: 100 | 60 | 40 | 0) {
+    if (!current) return;
+    const nextQueue = [...queue];
+    let nextDone = doneCount;
+    if (level !== 100) {
+      const pos = requeuePosition(nextQueue.length, level);
+      nextQueue.splice(pos, 0, current);
+    } else {
+      nextDone += 1;
+    }
+    const nextCurrent = nextQueue.length > 0 ? nextQueue.shift()! : null;
+    const nextSide = getDisplaySide(mode);
+
+    setMascotState(level >= 60 ? "correct" : "wrong");
+    setQueue(nextQueue);
+    setCurrent(nextCurrent ?? null);
+    setDoneCount(nextDone);
+    setDisplaySide(nextSide);
+    setShowAnswer(false);
+    setShowHint(false);
+
+    persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, radicals: isRadicals, labels: filesLabel });
+  }
+
+  const finished = focus && current === null && queue.length === 0 && total > 0;
+
+  useEffect(() => {
+    if (finished && userId && !resultSaved) {
+      // 완료 시점에 통계 저장을 1회만 수행하기 위한 가드. 외부 저장소(Supabase) 호출을
+      // 트리거하는 부수효과이므로 useEffect가 맞는 자리다.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setResultSaved(true);
+      appendStudyStat(userId, "practice", total, total);
+      deleteProgress(userId, "practice");
+    }
+  }, [finished, userId, resultSaved, total]);
+
+  if (focus) {
+    const qText = current ? (displaySide === 0 ? current.word : current.meaning) : "";
+    const aText = current ? (displaySide === 0 ? current.meaning : current.word) : "";
+
+    return (
+      <div className="mx-auto max-w-xl px-4 pt-4">
+        {!finished && current ? (
+          <>
+            <div className="flex items-center justify-between">
+              <ProgressBar ratio={doneCount / Math.max(1, total)} />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+              <span>완료 {doneCount} / {total}</span>
+              <span>남은 큐 {queue.length + 1}개</span>
+            </div>
+
+            <div className="mt-4 flex justify-center">
+              <Mascot state={mascotState} />
+            </div>
+
+            <div className="mt-3">
+              <FlashCard
+                flipped={showAnswer}
+                front={<div className="text-2xl font-extrabold text-center">{qText}</div>}
+                back={
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="text-lg font-bold text-center" style={{ color: "var(--text-muted)" }}>
+                      {qText}
+                    </div>
+                    <div className="text-2xl font-extrabold text-center" style={{ color: "var(--accent-dark)" }}>
+                      {aText}
+                    </div>
+                    {showHint && current.hint.trim() && (
+                      <div
+                        className="hint-reveal mt-2 w-full rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
+                        style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
+                      >
+                        {current.hint}
+                      </div>
+                    )}
+                  </div>
+                }
+              />
+            </div>
+
+            {!showAnswer ? (
+              <div className="mt-4">
+                <button onClick={revealAnswer} className="btn-3d btn-blue w-full">
+                  정답 확인
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button onClick={() => score(100)} className="btn-3d btn-accent">
+                  완벽함 (100)
+                </button>
+                <button onClick={() => score(60)} className="btn-3d btn-blue">
+                  조금 앎 (60)
+                </button>
+                <button onClick={() => score(40)} className="btn-3d btn-amber">
+                  헷갈림 (40)
+                </button>
+                <button onClick={() => score(0)} className="btn-3d btn-red">
+                  모름 (0)
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="study-card mt-10 p-8 text-center">
+            <div className="flex justify-center mb-3">
+              <Mascot state="correct" />
+            </div>
+            <div className="text-lg font-bold" style={{ color: "var(--accent)" }}>
+              대기열의 모든 연습을 완료했습니다.
+            </div>
+          </div>
+        )}
+        <ExitFocusButton onExit={() => setSaved(null)} label="연습 종료하기" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
+      <h1 className="text-xl font-extrabold">연습 파트</h1>
+      <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+        망각 곡선 큐 적용. 4단계로 스스로 채점하면 모르는 단어일수록 더 빨리 다시 만납니다.
+      </p>
+
+      {ready && !userId && (
+        <div className="mt-3 rounded-xl px-4 py-2.5 text-xs" style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}>
+          <Link href="/more/settings" className="font-bold underline">
+            내 번호
+          </Link>
+          를 설정하면 연습 진행 상황이 기기 간에 저장됩니다.
+        </div>
+      )}
+
+      {saved && (
+        <div className="mt-4 study-card p-4">
+          <div className="text-sm">
+            저장된 연습 진행이 있습니다: {saved.doneCount} / {saved.totalCount} 완료
+          </div>
+          <button onClick={resume} className="btn-3d btn-blue mt-3 w-full">
+            이어서 연습하기
+          </button>
+        </div>
+      )}
+
+      {fromWrongNotes && userId && (
+        <div className="mt-4 study-card p-4">
+          <div className="text-sm">오답 노트에 있는 단어로 바로 연습을 시작합니다.</div>
+          <button onClick={beginFromWrongNotes} disabled={starting} className="btn-3d btn-red mt-3 w-full">
+            {starting ? "불러오는 중..." : "오답 노트로 연습 시작"}
+          </button>
+        </div>
+      )}
+
+      <div className="mt-5">
+        <FileSelector onSelectionChange={setSelectedFiles} />
+      </div>
+
+      <div className="mt-5 grid grid-cols-3 gap-2">
+        <button onClick={() => begin("word_only", false)} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
+          이름만
+        </button>
+        <button onClick={() => begin("meaning_only", false)} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
+          뜻만
+        </button>
+        <button onClick={() => begin("random", false)} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
+          랜덤
+        </button>
+      </div>
+      <button
+        onClick={() => begin("random", true)}
+        disabled={selectedFiles.length === 0 || starting}
+        className="btn-3d btn-blue mt-3 w-full"
+      >
+        부수만 모아서 연습 (랜덤)
+      </button>
+    </div>
+  );
+}

@@ -1,0 +1,16 @@
+{
+  "name": "단어장 - 매일 조금씩 확실하게",
+  "short_name": "단어장",
+  "description": "GitHub 단어장 + 망각곡선 연습 + 시험 + 오답노트",
+  "start_url": "/study",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f7fb",
+  "theme_color": "#58cc02",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

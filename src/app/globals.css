@@ -1,26 +1,204 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f7f7fb;
+  --bg-elevated: #ffffff;
+  --card: #ffffff;
+  --card-border: #e5e5ea;
+  --text: #1c1c1f;
+  --text-muted: #6b6b72;
+  --accent: #58cc02;
+  --accent-dark: #46a302;
+  --accent-soft: #eaffd6;
+  --blue: #1cb0f6;
+  --blue-dark: #1899d6;
+  --red: #ff4b4b;
+  --red-dark: #ea2b2b;
+  --amber: #ffc800;
+  --nav-bg: #ffffff;
+  --hint-bg: #f2f2f6;
+  --shadow-color: 0 0 0;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root[data-theme="dark"] {
+  --bg: #0f0f13;
+  --bg-elevated: #17171d;
+  --card: #1c1c24;
+  --card-border: #2e2e38;
+  --text: #f2f2f5;
+  --text-muted: #9a9aa4;
+  --accent: #58cc02;
+  --accent-dark: #46a302;
+  --accent-soft: #1c2b0c;
+  --blue: #1cb0f6;
+  --blue-dark: #1899d6;
+  --red: #ff5c5c;
+  --red-dark: #e23f3f;
+  --amber: #ffc800;
+  --nav-bg: #17171d;
+  --hint-bg: #23232c;
+  --shadow-color: 0 0 0;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --bg: #0f0f13;
+    --bg-elevated: #17171d;
+    --card: #1c1c24;
+    --card-border: #2e2e38;
+    --text: #f2f2f5;
+    --text-muted: #9a9aa4;
+    --accent-soft: #1c2b0c;
+    --nav-bg: #17171d;
+    --hint-bg: #23232c;
   }
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* ---------- 듀오링고 스타일 3D 눌림 버튼 ---------- */
+.btn-3d {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  border-radius: 16px;
+  padding: 0.85rem 1.1rem;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.btn-3d:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-3d:active:not(:disabled) {
+  transform: translateY(3px);
+}
+
+.btn-accent {
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 4px 0 var(--accent-dark);
+}
+.btn-accent:active:not(:disabled) {
+  box-shadow: 0 1px 0 var(--accent-dark);
+}
+
+.btn-blue {
+  background: var(--blue);
+  color: #ffffff;
+  box-shadow: 0 4px 0 var(--blue-dark);
+}
+.btn-blue:active:not(:disabled) {
+  box-shadow: 0 1px 0 var(--blue-dark);
+}
+
+.btn-red {
+  background: var(--red);
+  color: #ffffff;
+  box-shadow: 0 4px 0 var(--red-dark);
+}
+.btn-red:active:not(:disabled) {
+  box-shadow: 0 1px 0 var(--red-dark);
+}
+
+.btn-ghost {
+  background: var(--card);
+  color: var(--text);
+  border: 2px solid var(--card-border);
+  box-shadow: 0 4px 0 var(--card-border);
+}
+.btn-ghost:active:not(:disabled) {
+  box-shadow: 0 1px 0 var(--card-border);
+}
+
+.btn-amber {
+  background: var(--amber);
+  color: #2b2200;
+  box-shadow: 0 4px 0 #c99f00;
+}
+.btn-amber:active:not(:disabled) {
+  box-shadow: 0 1px 0 #c99f00;
+}
+
+/* ---------- 카드 ---------- */
+.study-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(var(--shadow-color) / 0.06);
+}
+
+/* ---------- 3D 플립 카드 ---------- */
+.flip-scene {
+  perspective: 1400px;
+}
+.flip-card {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.45s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+.flip-card.flipped {
+  transform: rotateY(180deg);
+}
+.flip-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flip-face-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+/* ---------- 힌트 등장 ---------- */
+@keyframes hintReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.hint-reveal {
+  animation: hintReveal 0.28s ease both;
+}
+
+/* ---------- 스크롤바 최소화 ---------- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }
