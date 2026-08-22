@@ -120,7 +120,7 @@ export default function StudyPage() {
               <div className="text-lg font-semibold text-center">{current.meaning}</div>
               {showHint && current.hint.trim() && (
                 <div
-                  className="hint-reveal w-full rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
+                  className="hint-reveal w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
                   style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
                 >
                   {current.hint}

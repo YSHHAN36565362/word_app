@@ -153,8 +153,17 @@ body {
 .flip-scene {
   perspective: 1400px;
 }
+/*
+ * 앞/뒤 두 면을 grid로 같은 셀에 겹쳐 쌓는다(각 면은 grid-area: 1 / 1).
+ * absolute + inset:0 방식은 뒷면 높이를 "앞면 높이"에 그대로 고정시켜서,
+ * 뒷면 내용(긴 한자 해설 등)이 그보다 길면 위/아래로 동시에 넘쳐 카드 위쪽
+ * (마스코트/단어)과 아래쪽(채점 버튼)을 동시에 가리는 문제가 있었다.
+ * grid 겹쳐쌓기는 두 면 중 "더 큰 쪽" 높이에 맞춰 카드 전체가 자동으로
+ * 늘어나므로, 어느 쪽이 더 길든 항상 그 안에 들어간다.
+ */
 .flip-card {
   position: relative;
+  display: grid;
   transform-style: preserve-3d;
   transition: transform 0.45s cubic-bezier(0.4, 0.2, 0.2, 1);
 }
@@ -162,12 +171,12 @@ body {
   transform: rotateY(180deg);
 }
 .flip-face {
+  grid-area: 1 / 1;
+  min-width: 0;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
 .flip-face-back {
-  position: absolute;
-  inset: 0;
   transform: rotateY(180deg);
 }
 

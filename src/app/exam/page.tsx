@@ -214,7 +214,7 @@ export default function ExamPage() {
                     </div>
                     {current.hint.trim() && (
                       <div
-                        className="hint-reveal mt-2 w-full rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
+                        className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
                         style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
                       >
                         {current.hint}
