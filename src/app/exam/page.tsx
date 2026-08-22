@@ -15,6 +15,7 @@ import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, shuffle } from "@/lib/queue";
 import { addWordsToWrongNotes, appendStudyStat, deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
+import { loadMasteryMap, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { ExamProgress, FileRef, StudyMode, WordEntry } from "@/lib/types";
 
 export default function ExamPage() {
@@ -88,11 +89,17 @@ export default function ExamPage() {
     } as ExamProgress);
   }
 
-  function begin(selectedMode: StudyMode) {
+  async function begin(selectedMode: StudyMode) {
     if (availableWords.length === 0) return;
-    const pool = shuffle(availableWords);
+    let pool = shuffle(availableWords);
+    if (userId) {
+      const mastery = await loadMasteryMap(userId, pool);
+      // 점수가 낮은(약한) 단어부터 뽑히도록 정렬한 뒤, 그중 출제 개수만큼 골라서
+      // 다시 섞는다 — "약한 단어 위주로 출제되지만 순서는 무작위"가 된다.
+      pool = prioritizeByMastery(pool, mastery);
+    }
     const count = Math.min(countInput, pool.length);
-    const examWords = pool.slice(0, count);
+    const examWords = shuffle(pool.slice(0, count));
     const q = [...examWords];
     const first = q.shift() ?? null;
     const side = getDisplaySide(selectedMode);
@@ -156,6 +163,7 @@ export default function ExamPage() {
     setTurnId((t) => t + 1);
 
     persist({ queue: nextQueue, current: nextCurrent, total, num: nextNumber, correct: nextCorrect, wrong: nextWrong, side: nextSide, m: mode, labels: filesLabel });
+    if (userId) saveWordMastery(userId, current, correct ? 100 : 0);
   }
 
   const finished = focus && current === null && total > 0;

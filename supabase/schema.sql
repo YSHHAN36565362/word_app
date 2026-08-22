@@ -30,12 +30,26 @@ create table if not exists study_stats (
 
 create index if not exists study_stats_user_id_idx on study_stats (user_id);
 
+-- 단어별 장기 숙련도. 연습/시험에서 채점할 때마다 그 단어의 "최신 점수"만 덮어쓴다
+-- (연습: 100/60/40/0, 시험: 맞음=100/틀림=0). 다음에 연습·시험을 시작할 때 이 점수가
+-- 낮은 단어일수록 큐/출제 앞쪽에 오도록 정렬해서, 세션이 끝나도 "약한 단어"가 기억되게 한다.
+create table if not exists word_mastery (
+  user_id text not null,
+  word_key text not null,
+  score int not null check (score in (0, 40, 60, 100)),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, word_key)
+);
+
+create index if not exists word_mastery_user_id_idx on word_mastery (user_id);
+
 -- Row Level Security: anon key로 접근하는 클라이언트 전용 테이블이므로,
 -- 익명 역할(anon)에 전체 CRUD를 허용한다. (실 서비스 수준 보안은 아니며,
 -- 기존 앱의 "번호만 알면 됨" 신뢰 모델을 그대로 웹으로 옮긴 것)
 alter table progress enable row level security;
 alter table wrong_notes enable row level security;
 alter table study_stats enable row level security;
+alter table word_mastery enable row level security;
 
 drop policy if exists "anon full access" on progress;
 create policy "anon full access" on progress for all to anon using (true) with check (true);
@@ -45,3 +59,6 @@ create policy "anon full access" on wrong_notes for all to anon using (true) wit
 
 drop policy if exists "anon full access" on study_stats;
 create policy "anon full access" on study_stats for all to anon using (true) with check (true);
+
+drop policy if exists "anon full access" on word_mastery;
+create policy "anon full access" on word_mastery for all to anon using (true) with check (true);

@@ -16,6 +16,7 @@ import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, shuffle } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, loadProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
+import { loadMasteryMap, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
 
 export default function PracticePage() {
@@ -74,9 +75,13 @@ function PracticePageInner() {
     } as PracticeProgress);
   }
 
-  function startWithList(list: WordEntry[], selectedMode: StudyMode, labels: string[]) {
+  async function startWithList(list: WordEntry[], selectedMode: StudyMode, labels: string[]) {
     if (list.length === 0) return;
-    const pool = shuffle(list);
+    let pool = shuffle(list);
+    if (userId) {
+      const mastery = await loadMasteryMap(userId, pool);
+      pool = prioritizeByMastery(pool, mastery);
+    }
     const q = [...pool];
     const first = q.shift() ?? null;
     const side = getDisplaySide(selectedMode);
@@ -103,17 +108,17 @@ function PracticePageInner() {
     setStarting(true);
     const paths = selectedFiles.map((f) => f.path);
     const list = await fetchWords(paths);
-    setStarting(false);
     const labels = selectedFiles.map((f) => f.label);
-    startWithList(list, selectedMode, labels);
+    await startWithList(list, selectedMode, labels);
+    setStarting(false);
   }
 
   async function beginFromWrongNotes() {
     if (!userId) return;
     setStarting(true);
     const list = await loadWrongNotes(userId);
+    await startWithList(list, "random", ["오답 노트"]);
     setStarting(false);
-    startWithList(list, "random", ["오답 노트"]);
   }
 
   function resume() {
@@ -160,6 +165,7 @@ function PracticePageInner() {
     setTurnId((t) => t + 1);
 
     persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, labels: filesLabel });
+    if (userId) saveWordMastery(userId, current, level);
   }
 
   const finished = focus && current === null && queue.length === 0 && total > 0;
