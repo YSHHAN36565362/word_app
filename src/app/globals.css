@@ -195,6 +195,14 @@ body {
   animation: hintReveal 0.28s ease both;
 }
 
+/* ---------- 월별 아코디언(FileSelector) 펼침 화살표 ---------- */
+.details-chevron {
+  transition: transform 0.2s ease;
+}
+details[open] > summary .details-chevron {
+  transform: rotate(90deg);
+}
+
 /* ---------- 스크롤바 최소화 ---------- */
 ::-webkit-scrollbar {
   width: 6px;

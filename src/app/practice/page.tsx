@@ -5,10 +5,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import FileSelector from "@/components/FileSelector";
 import ExitFocusButton from "@/components/ExitFocusButton";
+import FocusScreen from "@/components/FocusScreen";
 import ProgressBar from "@/components/ProgressBar";
 import FlashCard from "@/components/FlashCard";
+import KeyBadge from "@/components/KeyBadge";
 import Mascot, { MascotState } from "@/components/Mascot";
 import { useFocusMode } from "@/contexts/FocusModeContext";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchRadicalWords, fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, shuffle } from "@/lib/queue";
@@ -167,74 +170,97 @@ function PracticePageInner() {
     }
   }, [finished, userId, resultSaved, total]);
 
+  useKeyboardShortcuts(
+    {
+      " ": () => { if (!showAnswer) revealAnswer(); },
+      Enter: () => { if (!showAnswer) revealAnswer(); },
+      "1": () => { if (showAnswer) score(0); },
+      "2": () => { if (showAnswer) score(40); },
+      "3": () => { if (showAnswer) score(60); },
+      "4": () => { if (showAnswer) score(100); },
+      ArrowLeft: () => { if (showAnswer) score(0); },
+      ArrowDown: () => { if (showAnswer) score(40); },
+      ArrowUp: () => { if (showAnswer) score(60); },
+      ArrowRight: () => { if (showAnswer) score(100); },
+    },
+    focus && !finished && current !== null
+  );
+
   if (focus) {
     const qText = current ? (displaySide === 0 ? current.word : current.meaning) : "";
     const aText = current ? (displaySide === 0 ? current.meaning : current.word) : "";
 
     return (
-      <div className="mx-auto max-w-xl px-4 pt-4">
-        {!finished && current ? (
-          <>
-            <div className="flex items-center justify-between">
+      <FocusScreen
+        top={
+          !finished && current ? (
+            <>
               <ProgressBar ratio={doneCount / Math.max(1, total)} />
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-              <span>완료 {doneCount} / {total}</span>
-              <span>남은 큐 {queue.length + 1}개</span>
-            </div>
-
-            <div className="mt-4 flex justify-center">
-              <Mascot state={mascotState} />
-            </div>
-
-            <div className="mt-3">
-              <FlashCard
-                flipped={showAnswer}
-                front={<div className="text-2xl font-extrabold text-center">{qText}</div>}
-                back={
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="text-lg font-bold text-center" style={{ color: "var(--text-muted)" }}>
-                      {qText}
-                    </div>
-                    <div className="text-2xl font-extrabold text-center" style={{ color: "var(--accent-dark)" }}>
-                      {aText}
-                    </div>
-                    {showHint && current.hint.trim() && (
-                      <div
-                        className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
-                        style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
-                      >
-                        {current.hint}
-                      </div>
-                    )}
-                  </div>
-                }
-              />
-            </div>
-
-            {!showAnswer ? (
-              <div className="mt-4">
-                <button onClick={revealAnswer} className="btn-3d btn-blue w-full">
-                  정답 확인
-                </button>
+              <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+                <span>완료 {doneCount} / {total}</span>
+                <span>남은 큐 {queue.length + 1}개</span>
               </div>
+              <div className="mt-4 flex justify-center">
+                <Mascot state={mascotState} />
+              </div>
+            </>
+          ) : null
+        }
+        actions={
+          !finished && current ? (
+            !showAnswer ? (
+              <button onClick={revealAnswer} className="btn-3d btn-blue w-full">
+                정답 확인
+                <KeyBadge>Space</KeyBadge>
+              </button>
             ) : (
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => score(100)} className="btn-3d btn-accent">
                   완벽함 (100)
+                  <KeyBadge>4 / →</KeyBadge>
                 </button>
                 <button onClick={() => score(60)} className="btn-3d btn-blue">
                   조금 앎 (60)
+                  <KeyBadge>3 / ↑</KeyBadge>
                 </button>
                 <button onClick={() => score(40)} className="btn-3d btn-amber">
                   헷갈림 (40)
+                  <KeyBadge>2 / ↓</KeyBadge>
                 </button>
                 <button onClick={() => score(0)} className="btn-3d btn-red">
                   모름 (0)
+                  <KeyBadge>1 / ←</KeyBadge>
                 </button>
               </div>
-            )}
-          </>
+            )
+          ) : undefined
+        }
+      >
+        {!finished && current ? (
+          <div className="mt-3">
+            <FlashCard
+              flipped={showAnswer}
+              front={<div className="text-2xl font-extrabold text-center">{qText}</div>}
+              back={
+                <div className="flex flex-col items-center gap-2">
+                  <div className="text-lg font-bold text-center" style={{ color: "var(--text-muted)" }}>
+                    {qText}
+                  </div>
+                  <div className="text-2xl font-extrabold text-center" style={{ color: "var(--accent-dark)" }}>
+                    {aText}
+                  </div>
+                  {showHint && current.hint.trim() && (
+                    <div
+                      className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
+                      style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
+                    >
+                      {current.hint}
+                    </div>
+                  )}
+                </div>
+              }
+            />
+          </div>
         ) : (
           <div className="study-card mt-10 p-8 text-center">
             <div className="flex justify-center mb-3">
@@ -246,7 +272,7 @@ function PracticePageInner() {
           </div>
         )}
         <ExitFocusButton onExit={() => setSaved(null)} label="연습 종료하기" />
-      </div>
+      </FocusScreen>
     );
   }
 
@@ -255,6 +281,9 @@ function PracticePageInner() {
       <h1 className="text-xl font-extrabold">연습 파트</h1>
       <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
         망각 곡선 큐 적용. 4단계로 스스로 채점하면 모르는 단어일수록 더 빨리 다시 만납니다.
+      </p>
+      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+        단축키: Space/Enter=정답 확인 · 1~4 또는 방향키(←↓↑→)=모름/헷갈림/조금앎/완벽함
       </p>
 
       {ready && !userId && (

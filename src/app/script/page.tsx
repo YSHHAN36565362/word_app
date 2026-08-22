@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import FileSelector from "@/components/FileSelector";
 import ExitFocusButton from "@/components/ExitFocusButton";
+import FocusScreen from "@/components/FocusScreen";
 import ProgressBar from "@/components/ProgressBar";
+import KeyBadge from "@/components/KeyBadge";
 import { useFocusMode } from "@/contexts/FocusModeContext";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchScriptLines } from "@/lib/api";
 import { deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
@@ -69,29 +72,48 @@ export default function ScriptPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
 
+  useKeyboardShortcuts(
+    {
+      ArrowRight: () => go(1),
+      ArrowLeft: () => { if (index > 0) go(-1); },
+    },
+    focus && !done
+  );
+
   if (focus) {
     return (
-      <div className="mx-auto max-w-xl px-4 pt-4">
-        {!done ? (
-          <>
-            <ProgressBar ratio={index / Math.max(1, lines.length)} />
-            <div className="mt-2 text-center text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-              {index + 1} / {lines.length}
-            </div>
-            <div className="study-card mt-4 p-8 min-h-[160px] flex items-center">
-              <p className="text-lg font-semibold leading-relaxed" style={{ color: "var(--blue)" }}>
-                {lines[index]}
-              </p>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
+      <FocusScreen
+        top={
+          !done ? (
+            <>
+              <ProgressBar ratio={index / Math.max(1, lines.length)} />
+              <div className="mt-2 text-center text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+                {index + 1} / {lines.length}
+              </div>
+            </>
+          ) : null
+        }
+        actions={
+          !done ? (
+            <div className="grid grid-cols-2 gap-3">
               <button onClick={() => go(-1)} disabled={index === 0} className="btn-3d btn-ghost">
                 이전 문장
+                <KeyBadge>←</KeyBadge>
               </button>
               <button onClick={() => go(1)} className="btn-3d btn-accent">
                 다음 문장
+                <KeyBadge>→</KeyBadge>
               </button>
             </div>
-          </>
+          ) : undefined
+        }
+      >
+        {!done ? (
+          <div className="study-card mt-4 p-8 min-h-[160px] flex items-center">
+            <p className="text-lg font-semibold leading-relaxed" style={{ color: "var(--blue)" }}>
+              {lines[index]}
+            </p>
+          </div>
         ) : (
           <div className="study-card mt-10 p-8 text-center">
             <div className="text-lg font-bold" style={{ color: "var(--accent)" }}>
@@ -100,7 +122,7 @@ export default function ScriptPage() {
           </div>
         )}
         <ExitFocusButton onExit={() => setSaved(null)} label="지문 학습 종료하기" />
-      </div>
+      </FocusScreen>
     );
   }
 
@@ -109,6 +131,9 @@ export default function ScriptPage() {
       <h1 className="text-xl font-extrabold">지문 한 줄 외우기</h1>
       <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
         대화 및 지문을 순서대로 연상하며 외웁니다.
+      </p>
+      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+        단축키: ←/→=이전/다음 문장
       </p>
 
       {ready && !userId && (

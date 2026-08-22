@@ -101,6 +101,17 @@ export default function FileSelector({ onSelectionChange }: Props) {
     setCheckedPaths(new Set());
   }
 
+  function setFilesChecked(paths: string[], checked: boolean) {
+    setCheckedPaths((prev) => {
+      const next = new Set(prev);
+      for (const p of paths) {
+        if (checked) next.add(p);
+        else next.delete(p);
+      }
+      return next;
+    });
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -179,10 +190,41 @@ export default function FileSelector({ onSelectionChange }: Props) {
         {monthGroups.map((group, idx) => (
           <details key={group.key} open={idx === 0} className="rounded-2xl border overflow-hidden" style={{ borderColor: "var(--card-border)" }}>
             <summary
-              className="cursor-pointer px-4 py-2.5 text-sm font-bold select-none"
+              className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5 text-sm font-bold select-none [&::-webkit-details-marker]:hidden"
               style={{ background: "var(--hint-bg)", color: "var(--text)" }}
             >
-              {group.label} ({group.files.length}개)
+              <span>
+                <span className="details-chevron mr-1 inline-block" style={{ color: "var(--text-muted)" }}>
+                  ▸
+                </span>
+                {group.label} ({group.files.length}개)
+              </span>
+              <span className="flex shrink-0 gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFilesChecked(group.files.map((f) => f.path), true);
+                  }}
+                  className="rounded-full px-2.5 py-1 text-[11px] font-bold"
+                  style={{ background: "var(--accent)", color: "#fff" }}
+                >
+                  이 달 전체선택
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFilesChecked(group.files.map((f) => f.path), false);
+                  }}
+                  className="rounded-full px-2.5 py-1 text-[11px] font-bold"
+                  style={{ background: "var(--card)", color: "var(--text-muted)", border: "1px solid var(--card-border)" }}
+                >
+                  해제
+                </button>
+              </span>
             </summary>
             <div className="flex flex-col divide-y" style={{ borderColor: "var(--card-border)" }}>
               {group.files.map((f) => (

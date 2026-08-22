@@ -25,7 +25,13 @@ export async function GET() {
     return NextResponse.json({ categories: [], error: reason }, { status: 200 });
   }
 
-  const mainCats = await getDirNames("word_list");
+  const mainCats = (await getDirNames("word_list")).sort((a, b) => {
+    // "Japanese"를 항상 맨 앞에 둔다 (가장 자주 쓰는 카테고리라 기본 선택도 이걸로 감).
+    // 나머지는 원래대로 이름순.
+    if (a === "Japanese") return -1;
+    if (b === "Japanese") return 1;
+    return a.localeCompare(b);
+  });
   const categories: CategoryNode[] = [];
 
   for (const main of mainCats) {

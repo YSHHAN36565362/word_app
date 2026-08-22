@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import FileSelector from "@/components/FileSelector";
 import ExitFocusButton from "@/components/ExitFocusButton";
+import FocusScreen from "@/components/FocusScreen";
 import ProgressBar from "@/components/ProgressBar";
 import FlashCard from "@/components/FlashCard";
+import KeyBadge from "@/components/KeyBadge";
 import Mascot, { MascotState } from "@/components/Mascot";
 import { useFocusMode } from "@/contexts/FocusModeContext";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, shuffle } from "@/lib/queue";
@@ -166,6 +169,16 @@ export default function ExamPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
+  useKeyboardShortcuts(
+    {
+      " ": () => { if (!showAnswer) setShowAnswer(true); },
+      Enter: () => { if (!showAnswer) setShowAnswer(true); },
+      ArrowRight: () => { if (showAnswer) next(true); },
+      ArrowLeft: () => { if (showAnswer) next(false); },
+    },
+    focus && !finished && current !== null
+  );
+
   function retryWrongOnly() {
     if (wrongWords.length === 0) return;
     const q = [...wrongWords];
@@ -187,59 +200,68 @@ export default function ExamPage() {
     const aText = current ? (displaySide === 0 ? current.meaning : current.word) : "";
 
     return (
-      <div className="mx-auto max-w-xl px-4 pt-4">
-        {!finished && current ? (
-          <>
-            <ProgressBar ratio={(currentNumber - 1) / Math.max(1, total)} />
-            <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-              <span>진행 {currentNumber} / {total}</span>
-              <span>맞음 {correctCount} · 틀림 {wrongCount}</span>
-            </div>
-
-            <div className="mt-4 flex justify-center">
-              <Mascot state={mascotState} />
-            </div>
-
-            <div className="mt-3">
-              <FlashCard
-                flipped={showAnswer}
-                front={<div className="text-2xl font-extrabold text-center">{qText}</div>}
-                back={
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="text-lg font-bold text-center" style={{ color: "var(--text-muted)" }}>
-                      {qText}
-                    </div>
-                    <div className="text-2xl font-extrabold text-center" style={{ color: "var(--accent-dark)" }}>
-                      {aText}
-                    </div>
-                    {current.hint.trim() && (
-                      <div
-                        className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
-                        style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
-                      >
-                        {current.hint}
-                      </div>
-                    )}
-                  </div>
-                }
-              />
-            </div>
-
-            {!showAnswer ? (
-              <button onClick={() => setShowAnswer(true)} className="btn-3d btn-blue mt-4 w-full">
+      <FocusScreen
+        top={
+          !finished && current ? (
+            <>
+              <ProgressBar ratio={(currentNumber - 1) / Math.max(1, total)} />
+              <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+                <span>진행 {currentNumber} / {total}</span>
+                <span>맞음 {correctCount} · 틀림 {wrongCount}</span>
+              </div>
+              <div className="mt-4 flex justify-center">
+                <Mascot state={mascotState} />
+              </div>
+            </>
+          ) : null
+        }
+        actions={
+          !finished && current ? (
+            !showAnswer ? (
+              <button onClick={() => setShowAnswer(true)} className="btn-3d btn-blue w-full">
                 정답 확인
+                <KeyBadge>Space</KeyBadge>
               </button>
             ) : (
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => next(true)} className="btn-3d btn-accent">
                   맞음
+                  <KeyBadge>→</KeyBadge>
                 </button>
                 <button onClick={() => next(false)} className="btn-3d btn-red">
                   틀림
+                  <KeyBadge>←</KeyBadge>
                 </button>
               </div>
-            )}
-          </>
+            )
+          ) : undefined
+        }
+      >
+        {!finished && current ? (
+          <div className="mt-3">
+            <FlashCard
+              flipped={showAnswer}
+              front={<div className="text-2xl font-extrabold text-center">{qText}</div>}
+              back={
+                <div className="flex flex-col items-center gap-2">
+                  <div className="text-lg font-bold text-center" style={{ color: "var(--text-muted)" }}>
+                    {qText}
+                  </div>
+                  <div className="text-2xl font-extrabold text-center" style={{ color: "var(--accent-dark)" }}>
+                    {aText}
+                  </div>
+                  {current.hint.trim() && (
+                    <div
+                      className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
+                      style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
+                    >
+                      {current.hint}
+                    </div>
+                  )}
+                </div>
+              }
+            />
+          </div>
         ) : (
           <div className="study-card mt-8 p-8 text-center">
             <div className="flex justify-center mb-3">
@@ -265,7 +287,7 @@ export default function ExamPage() {
           </div>
         )}
         <ExitFocusButton onExit={() => setSaved(null)} label="시험 종료하기" />
-      </div>
+      </FocusScreen>
     );
   }
 
@@ -274,6 +296,9 @@ export default function ExamPage() {
       <h1 className="text-xl font-extrabold">시험 파트</h1>
       <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
         출제 개수를 정하고 O/X로 채점합니다. 틀린 단어는 오답 노트에 자동으로 쌓입니다.
+      </p>
+      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+        단축키: Space/Enter=정답 확인 · ←=틀림 →=맞음
       </p>
 
       {ready && !userId && (

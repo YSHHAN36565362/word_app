@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import FileSelector from "@/components/FileSelector";
 import ExitFocusButton from "@/components/ExitFocusButton";
+import FocusScreen from "@/components/FocusScreen";
 import ProgressBar from "@/components/ProgressBar";
+import KeyBadge from "@/components/KeyBadge";
 import { useFocusMode } from "@/contexts/FocusModeContext";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchRadicalWords, fetchWords } from "@/lib/api";
 import { shuffle } from "@/lib/queue";
@@ -65,8 +68,7 @@ export default function StudyPage() {
     setFocus(true);
   }
 
-  function next() {
-    const nextIndex = index + 1;
+  function goTo(nextIndex: number) {
     setIndex(nextIndex);
     setShowHint(false);
     if (userId) {
@@ -77,6 +79,15 @@ export default function StudyPage() {
         wordsAreRadicals: isRadicals,
       } as StudyProgress);
     }
+  }
+
+  function next() {
+    goTo(index + 1);
+  }
+
+  function prev() {
+    if (index === 0) return;
+    goTo(index - 1);
   }
 
   function toggleFavorite(word: string) {
@@ -97,50 +108,70 @@ export default function StudyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
 
+  useKeyboardShortcuts(
+    {
+      ArrowRight: () => next(),
+      ArrowLeft: () => prev(),
+      h: () => {
+        if (words[index]?.hint.trim()) setShowHint(true);
+      },
+    },
+    focus && !done
+  );
+
   if (focus) {
     const current = words[index];
     return (
-      <div className="mx-auto max-w-xl px-4 pt-4">
-        {!done && current ? (
-          <>
-            <ProgressBar ratio={index / Math.max(1, words.length)} />
-            <div className="mt-2 text-center text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-              {index + 1} / {words.length}
-            </div>
-
-            <div className="study-card mt-4 p-8 flex flex-col items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="text-2xl font-extrabold" style={{ color: "var(--blue)" }}>
-                  {current.word}
-                </div>
-                <button onClick={() => toggleFavorite(current.word)} className="text-lg" aria-label="즐겨찾기">
-                  {favorites.has(current.word) ? "★" : "☆"}
-                </button>
+      <FocusScreen
+        top={
+          !done && current ? (
+            <>
+              <ProgressBar ratio={index / Math.max(1, words.length)} />
+              <div className="mt-2 text-center text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+                {index + 1} / {words.length}
               </div>
-              <div className="text-lg font-semibold text-center">{current.meaning}</div>
-              {showHint && current.hint.trim() && (
-                <div
-                  className="hint-reveal w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
-                  style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
-                >
-                  {current.hint}
-                </div>
-              )}
+            </>
+          ) : null
+        }
+        actions={
+          !done && current ? (
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={prev} disabled={index === 0} className="btn-3d btn-ghost text-sm">
+                이전
+                <KeyBadge>←</KeyBadge>
+              </button>
+              <button onClick={() => setShowHint(true)} disabled={!current.hint.trim()} className="btn-3d btn-ghost text-sm">
+                힌트
+                <KeyBadge>H</KeyBadge>
+              </button>
+              <button onClick={next} className="btn-3d btn-accent text-sm">
+                다음
+                <KeyBadge>→</KeyBadge>
+              </button>
             </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setShowHint(true)}
-                disabled={!current.hint.trim()}
-                className="btn-3d btn-ghost"
+          ) : undefined
+        }
+      >
+        {!done && current ? (
+          <div className="study-card mt-4 p-8 flex flex-col items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="text-2xl font-extrabold" style={{ color: "var(--blue)" }}>
+                {current.word}
+              </div>
+              <button onClick={() => toggleFavorite(current.word)} className="text-lg" aria-label="즐겨찾기">
+                {favorites.has(current.word) ? "★" : "☆"}
+              </button>
+            </div>
+            <div className="text-lg font-semibold text-center">{current.meaning}</div>
+            {showHint && current.hint.trim() && (
+              <div
+                className="hint-reveal w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
+                style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
               >
-                힌트 보기
-              </button>
-              <button onClick={next} className="btn-3d btn-accent">
-                다음 단어
-              </button>
-            </div>
-          </>
+                {current.hint}
+              </div>
+            )}
+          </div>
         ) : (
           <div className="study-card mt-10 p-8 text-center">
             <div className="text-lg font-bold" style={{ color: "var(--accent)" }}>
@@ -154,7 +185,7 @@ export default function StudyPage() {
           </div>
         )}
         <ExitFocusButton onExit={() => setSaved(null)} label="학습 종료하기" />
-      </div>
+      </FocusScreen>
     );
   }
 
@@ -163,6 +194,9 @@ export default function StudyPage() {
       <h1 className="text-xl font-extrabold">학습 파트</h1>
       <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
         단어를 순서대로 넘기며 훑어보는 1회독입니다.
+      </p>
+      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+        단축키: ←/→=이전/다음 단어 · H=힌트 보기
       </p>
 
       {ready && !userId && (
