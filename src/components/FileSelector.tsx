@@ -112,6 +112,10 @@ export default function FileSelector({ onSelectionChange }: Props) {
     });
   }
 
+  function monthAllChecked(files: FileRef[]): boolean {
+    return files.length > 0 && files.every((f) => checkedPaths.has(f.path));
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -199,32 +203,27 @@ export default function FileSelector({ onSelectionChange }: Props) {
                 </span>
                 {group.label} ({group.files.length}개)
               </span>
-              <span className="flex shrink-0 gap-1.5">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
+              <label
+                className="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
+                style={{
+                  background: monthAllChecked(group.files) ? "var(--accent)" : "var(--card)",
+                  color: monthAllChecked(group.files) ? "#fff" : "var(--text-muted)",
+                  border: `1px solid ${monthAllChecked(group.files) ? "var(--accent)" : "var(--card-border)"}`,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  checked={monthAllChecked(group.files)}
+                  onChange={(e) => {
                     e.stopPropagation();
-                    setFilesChecked(group.files.map((f) => f.path), true);
+                    setFilesChecked(group.files.map((f) => f.path), e.target.checked);
                   }}
-                  className="rounded-full px-2.5 py-1 text-[11px] font-bold"
-                  style={{ background: "var(--accent)", color: "#fff" }}
-                >
-                  이 달 전체선택
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setFilesChecked(group.files.map((f) => f.path), false);
-                  }}
-                  className="rounded-full px-2.5 py-1 text-[11px] font-bold"
-                  style={{ background: "var(--card)", color: "var(--text-muted)", border: "1px solid var(--card-border)" }}
-                >
-                  해제
-                </button>
-              </span>
+                  onClick={(e) => e.stopPropagation()}
+                  className="h-3.5 w-3.5 accent-white"
+                />
+                이 달 전체선택
+              </label>
             </summary>
             <div className="flex flex-col divide-y" style={{ borderColor: "var(--card-border)" }}>
               {group.files.map((f) => (

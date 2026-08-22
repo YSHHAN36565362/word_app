@@ -48,6 +48,12 @@ function PracticePageInner() {
   const [mascotState, setMascotState] = useState<MascotState>("idle");
   const [resultSaved, setResultSaved] = useState(false);
   const [filesLabel, setFilesLabel] = useState<string[]>([]);
+  // 단어가 바뀔 때마다 1씩 늘려서 FlashCard의 key로 쓴다. 뒤집기(showAnswer)를 false로
+  // 되돌리는 것과 카드 내용을 새 단어로 바꾸는 것이 "같은 렌더"에서 같이 일어나면,
+  // 뒤집는 CSS 애니메이션이 절반쯤 진행된 상태에서 뒷면 내용만 먼저 새 단어로 바뀌어
+  // 잠깐 다음 단어의 정답이 보였다 사라지는 문제가 있었다. key를 바꿔 카드를 완전히
+  // 새로 마운트하면 전환 애니메이션 없이 바로 앞면(새 단어)으로 나타나 이 문제가 없다.
+  const [turnId, setTurnId] = useState(0);
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -89,6 +95,7 @@ function PracticePageInner() {
     setResultSaved(false);
     setMascotState("idle");
     setFilesLabel(labels);
+    setTurnId((t) => t + 1);
     setFocus(true);
 
     persist({ queue: q, current: first, total: pool.length, done: 0, side, m: selectedMode, radicals, labels });
@@ -125,6 +132,7 @@ function PracticePageInner() {
     setShowHint(false);
     setResultSaved(false);
     setFilesLabel(saved.filesLabel);
+    setTurnId((t) => t + 1);
     setFocus(true);
   }
 
@@ -153,6 +161,7 @@ function PracticePageInner() {
     setDisplaySide(nextSide);
     setShowAnswer(false);
     setShowHint(false);
+    setTurnId((t) => t + 1);
 
     persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, radicals: isRadicals, labels: filesLabel });
   }
@@ -239,6 +248,7 @@ function PracticePageInner() {
         {!finished && current ? (
           <div className="mt-3">
             <FlashCard
+              key={turnId}
               flipped={showAnswer}
               front={<div className="text-2xl font-extrabold text-center">{qText}</div>}
               back={

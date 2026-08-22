@@ -39,6 +39,9 @@ export default function ExamPage() {
   const [resultSaved, setResultSaved] = useState(false);
   const [mascotState, setMascotState] = useState<MascotState>("idle");
   const [filesLabel, setFilesLabel] = useState<string[]>([]);
+  // FlashCard의 key. score(연습)와 같은 이유 — 뒤집기 상태 리셋과 다음 단어 교체가
+  // 한 렌더에서 같이 일어나면 뒤집는 애니메이션 도중 다음 단어의 정답이 잠깐 보인다.
+  const [turnId, setTurnId] = useState(0);
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -108,6 +111,7 @@ export default function ExamPage() {
     setMascotState("idle");
     setDisplaySide(side);
     setFilesLabel(labels);
+    setTurnId((t) => t + 1);
     setFocus(true);
 
     persist({ queue: q, current: first, total: count, num: 1, correct: 0, wrong: 0, side, m: selectedMode, labels });
@@ -126,6 +130,7 @@ export default function ExamPage() {
     setWrongWords([]);
     setResultSaved(false);
     setFilesLabel(saved.filesLabel);
+    setTurnId((t) => t + 1);
     setFocus(true);
   }
 
@@ -148,6 +153,7 @@ export default function ExamPage() {
     setShowAnswer(false);
     setDisplaySide(nextSide);
     setCurrentNumber(nextNumber);
+    setTurnId((t) => t + 1);
 
     persist({ queue: nextQueue, current: nextCurrent, total, num: nextNumber, correct: nextCorrect, wrong: nextWrong, side: nextSide, m: mode, labels: filesLabel });
   }
@@ -240,6 +246,7 @@ export default function ExamPage() {
         {!finished && current ? (
           <div className="mt-3">
             <FlashCard
+              key={turnId}
               flipped={showAnswer}
               front={<div className="text-2xl font-extrabold text-center">{qText}</div>}
               back={
