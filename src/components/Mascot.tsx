@@ -11,9 +11,21 @@ const MASCOT_IMAGE: Record<MascotState, string> = {
   wrong: "/images/sad.jpeg",
 };
 
-export default function Mascot({ state }: { state: MascotState }) {
+interface MascotProps {
+  state: MascotState;
+  /**
+   * 채점할 때마다 바뀌는 값(예: 카운터)을 넘기면, 같은 state를 연속으로 받아도
+   * (헷갈림→헷갈림처럼) motion.div가 매번 새로 마운트되어 흔들림/반응 애니메이션이
+   * 처음부터 다시 재생된다. state만 보고 key를 잡으면 값이 그대로일 때 애니메이션이
+   * 재생되지 않는 문제가 있었다.
+   */
+  reactionKey?: number | string;
+}
+
+export default function Mascot({ state, reactionKey }: MascotProps) {
   return (
     <motion.div
+      key={reactionKey ?? state}
       className="flex h-14 w-14 items-center justify-center"
       animate={
         state === "correct"

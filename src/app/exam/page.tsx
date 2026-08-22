@@ -216,7 +216,7 @@ export default function ExamPage() {
                 <span>맞음 {correctCount} · 틀림 {wrongCount}</span>
               </div>
               <div className="mt-4 flex justify-center">
-                <Mascot state={mascotState} />
+                <Mascot state={mascotState} reactionKey={turnId} />
               </div>
             </>
           ) : null

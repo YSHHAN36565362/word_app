@@ -206,7 +206,7 @@ function PracticePageInner() {
                 <span>남은 큐 {queue.length + 1}개</span>
               </div>
               <div className="mt-4 flex justify-center">
-                <Mascot state={mascotState} />
+                <Mascot state={mascotState} reactionKey={turnId} />
               </div>
             </>
           ) : null

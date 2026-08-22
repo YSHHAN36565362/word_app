@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { animate } from "animejs";
 import { daysUntilJLPT } from "@/lib/dday";
 
 const BUBBLES: { text: string; style: CSSProperties }[] = [
@@ -17,13 +18,39 @@ const BUBBLES: { text: string; style: CSSProperties }[] = [
 ];
 
 export default function Home() {
-  const [dday, setDday] = useState<number | null>(null);
+  const ddayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // new Date() 기반 계산이라 렌더 중에 바로 부르면 정적 프리렌더 시점(빌드 시각)의
-    // 값이 그대로 굳어버린다. 마운트 후에만 계산해야 방문할 때마다 실제 날짜로 갱신된다.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDday(daysUntilJLPT());
+    // new Date() 기반 계산이라 정적 프리렌더 시점(빌드 시각)이 아니라 마운트 후 실제
+    // 방문 시각으로 계산해야 매일 값이 자연스럽게 줄어든다. DOM을 직접 만지는 애니메이션이라
+    // React state를 거치지 않고 ref로 바로 처리한다.
+    const el = ddayRef.current;
+    if (!el) return;
+
+    const target = daysUntilJLPT();
+    const prefix = target >= 0 ? "D-" : "D+";
+    const counter = { value: 0 };
+    el.textContent = `${prefix}0`;
+
+    // 전광판이 은은하게 켜지는 느낌의 스케일/오파시티 인트로
+    animate(el, {
+      opacity: [0, 1],
+      scale: [0.85, 1],
+      duration: 700,
+      delay: 800,
+      ease: "outCubic",
+    });
+
+    // 0부터 목표 D-day까지 부드럽게 올라가는 카운트업
+    animate(counter, {
+      value: Math.abs(target),
+      duration: 1200,
+      delay: 800,
+      ease: "outExpo",
+      onUpdate: () => {
+        el.textContent = `${prefix}${Math.round(counter.value)}`;
+      },
+    });
   }, []);
 
   return (
@@ -105,10 +132,16 @@ export default function Home() {
           JLPT 시험일까지
         </div>
         <div
+          ref={ddayRef}
           className="mt-1 text-5xl font-extrabold tabular-nums"
-          style={{ color: "#ffb020", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", letterSpacing: "0.02em" }}
+          style={{
+            color: "#ffb020",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+            letterSpacing: "0.02em",
+            opacity: 0,
+          }}
         >
-          {dday === null ? "D-—" : dday >= 0 ? `D-${dday}` : `D+${Math.abs(dday)}`}
+          D-—
         </div>
         <div className="mt-1 text-xs" style={{ color: "#6b6c7a" }}>
           2026년 12월 6일 (한국 시간 기준)
@@ -125,7 +158,7 @@ export default function Home() {
           학습 시작하기
         </Link>
         <Link href="/practice" className="btn-3d btn-blue">
-          오늘의 복습
+          練習行こう
         </Link>
       </motion.div>
     </div>
