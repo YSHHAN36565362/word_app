@@ -34,7 +34,6 @@ export interface StudyProgress {
   words: WordEntry[];
   filesLabel: string[];
   studyIndex: number;
-  wordsAreRadicals: boolean;
 }
 
 export interface PracticeProgress {
@@ -45,7 +44,6 @@ export interface PracticeProgress {
   displaySide: 0 | 1;
   totalCount: number;
   doneCount: number;
-  wordsAreRadicals: boolean;
 }
 
 export interface ExamProgress {
@@ -73,9 +71,3 @@ export interface StudyStatRecord {
   correct: number;
 }
 
-export interface RadicalInfo {
-  reading: string;
-  desc: string;
-}
-
-export type RadicalLibrary = Record<string, RadicalInfo>;

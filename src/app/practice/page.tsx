@@ -13,7 +13,7 @@ import Mascot, { MascotState } from "@/components/Mascot";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
-import { fetchRadicalWords, fetchWords } from "@/lib/api";
+import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, shuffle } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, loadProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
 import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
@@ -44,7 +44,6 @@ function PracticePageInner() {
   const [doneCount, setDoneCount] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [showHint, setShowHint] = useState(false);
-  const [isRadicals, setIsRadicals] = useState(false);
   const [mascotState, setMascotState] = useState<MascotState>("idle");
   const [resultSaved, setResultSaved] = useState(false);
   const [filesLabel, setFilesLabel] = useState<string[]>([]);
@@ -62,7 +61,7 @@ function PracticePageInner() {
     });
   }, [ready, userId]);
 
-  function persist(next: { queue: WordEntry[]; current: WordEntry | null; total: number; done: number; side: 0 | 1; m: StudyMode; radicals: boolean; labels: string[] }) {
+  function persist(next: { queue: WordEntry[]; current: WordEntry | null; total: number; done: number; side: 0 | 1; m: StudyMode; labels: string[] }) {
     if (!userId) return;
     saveProgress(userId, "practice", {
       filesLabel: next.labels,
@@ -72,11 +71,10 @@ function PracticePageInner() {
       displaySide: next.side,
       totalCount: next.total,
       doneCount: next.done,
-      wordsAreRadicals: next.radicals,
     } as PracticeProgress);
   }
 
-  function startWithList(list: WordEntry[], selectedMode: StudyMode, radicals: boolean, labels: string[]) {
+  function startWithList(list: WordEntry[], selectedMode: StudyMode, labels: string[]) {
     if (list.length === 0) return;
     const pool = shuffle(list);
     const q = [...pool];
@@ -84,7 +82,6 @@ function PracticePageInner() {
     const side = getDisplaySide(selectedMode);
 
     setMode(selectedMode);
-    setIsRadicals(radicals);
     setQueue(q);
     setCurrent(first);
     setTotal(pool.length);
@@ -98,17 +95,17 @@ function PracticePageInner() {
     setTurnId((t) => t + 1);
     setFocus(true);
 
-    persist({ queue: q, current: first, total: pool.length, done: 0, side, m: selectedMode, radicals, labels });
+    persist({ queue: q, current: first, total: pool.length, done: 0, side, m: selectedMode, labels });
   }
 
-  async function begin(selectedMode: StudyMode, radicals: boolean) {
+  async function begin(selectedMode: StudyMode) {
     if (selectedFiles.length === 0) return;
     setStarting(true);
     const paths = selectedFiles.map((f) => f.path);
-    const list = radicals ? await fetchRadicalWords(paths) : await fetchWords(paths);
+    const list = await fetchWords(paths);
     setStarting(false);
-    const labels = radicals ? selectedFiles.map((f) => `${f.label} (부수만)`) : selectedFiles.map((f) => f.label);
-    startWithList(list, selectedMode, radicals, labels);
+    const labels = selectedFiles.map((f) => f.label);
+    startWithList(list, selectedMode, labels);
   }
 
   async function beginFromWrongNotes() {
@@ -116,13 +113,12 @@ function PracticePageInner() {
     setStarting(true);
     const list = await loadWrongNotes(userId);
     setStarting(false);
-    startWithList(list, "random", false, ["오답 노트"]);
+    startWithList(list, "random", ["오답 노트"]);
   }
 
   function resume() {
     if (!saved) return;
     setMode(saved.mode);
-    setIsRadicals(saved.wordsAreRadicals);
     setQueue(saved.queue);
     setCurrent(saved.currentWord);
     setTotal(saved.totalCount);
@@ -163,7 +159,7 @@ function PracticePageInner() {
     setShowHint(false);
     setTurnId((t) => t + 1);
 
-    persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, radicals: isRadicals, labels: filesLabel });
+    persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, labels: filesLabel });
   }
 
   const finished = focus && current === null && queue.length === 0 && total > 0;
@@ -330,23 +326,16 @@ function PracticePageInner() {
       </div>
 
       <div className="mt-5 grid grid-cols-3 gap-2">
-        <button onClick={() => begin("word_only", false)} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
+        <button onClick={() => begin("word_only")} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
           이름만
         </button>
-        <button onClick={() => begin("meaning_only", false)} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
+        <button onClick={() => begin("meaning_only")} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
           뜻만
         </button>
-        <button onClick={() => begin("random", false)} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
+        <button onClick={() => begin("random")} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
           랜덤
         </button>
       </div>
-      <button
-        onClick={() => begin("random", true)}
-        disabled={selectedFiles.length === 0 || starting}
-        className="btn-3d btn-blue mt-3 w-full"
-      >
-        부수만 모아서 연습 (랜덤)
-      </button>
     </div>
   );
 }

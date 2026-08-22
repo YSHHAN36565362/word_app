@@ -4,7 +4,6 @@ const ITEMS = [
   { href: "/stats", title: "학습 통계", desc: "일자별 연습/시험 기록과 정답률 추이" },
   { href: "/script", title: "지문 외우기", desc: "회화문/독해 지문을 한 줄씩 암송" },
   { href: "/wordbook", title: "단어장 추가", desc: "새 단어장을 GitHub에 직접 업로드" },
-  { href: "/radicals", title: "한자 풀이 사전", desc: "부수 214개 관리 및 편집" },
   { href: "/more/settings", title: "설정", desc: "내 번호, 다크 모드" },
 ];
 

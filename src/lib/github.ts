@@ -4,7 +4,7 @@ import "server-only";
  * GitHub Contents API 래퍼. 반드시 서버(Route Handler)에서만 import 할 것.
  * word_test 저장소가 public이라 토큰 없이도 읽기는 되지만, 토큰을 넣어두면
  * 시간당 요청 한도가 60회 -> 5,000회로 늘어나 30명이 몰려도 안전하다.
- * 쓰기(단어장 추가, 부수 사전 편집)는 토큰이 반드시 필요하다.
+ * 쓰기(단어장 추가)는 토큰이 반드시 필요하다.
  */
 
 function requireEnv(name: string): string {

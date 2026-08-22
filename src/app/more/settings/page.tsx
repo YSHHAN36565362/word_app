@@ -17,8 +17,7 @@ export default function SettingsPage() {
   useEffect(() => {
     // Supabase 클라이언트는 브라우저에서만 만들어져야 하므로(서버/빌드 시 prerender에서
     // 만들면 잘못된 URL 등으로 빌드가 깨질 수 있음) 마운트 후에만 확인한다.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSyncEnabled(isSyncEnabled());
+    isSyncEnabled().then(setSyncEnabled);
   }, []);
 
   return (

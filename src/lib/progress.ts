@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabase } from "./supabase";
+import { getSupabaseAsync } from "./supabase";
 import { StudyStatRecord, WordEntry } from "./types";
 import { wordKey } from "./queue";
 
@@ -12,7 +12,7 @@ import { wordKey } from "./queue";
 
 export async function saveProgress(userId: string, part: string, data: unknown): Promise<boolean> {
   if (!userId) return false;
-  const supabase = getSupabase();
+  const supabase = await getSupabaseAsync();
   if (!supabase) return false;
   const { error } = await supabase
     .from("progress")
@@ -22,7 +22,7 @@ export async function saveProgress(userId: string, part: string, data: unknown):
 
 export async function loadProgress<T>(userId: string, part: string): Promise<T | null> {
   if (!userId) return null;
-  const supabase = getSupabase();
+  const supabase = await getSupabaseAsync();
   if (!supabase) return null;
   const { data, error } = await supabase
     .from("progress")
@@ -36,14 +36,14 @@ export async function loadProgress<T>(userId: string, part: string): Promise<T |
 
 export async function deleteProgress(userId: string, part: string): Promise<void> {
   if (!userId) return;
-  const supabase = getSupabase();
+  const supabase = await getSupabaseAsync();
   if (!supabase) return;
   await supabase.from("progress").delete().eq("user_id", userId).eq("part", part);
 }
 
 export async function loadWrongNotes(userId: string): Promise<WordEntry[]> {
   if (!userId) return [];
-  const supabase = getSupabase();
+  const supabase = await getSupabaseAsync();
   if (!supabase) return [];
   const { data, error } = await supabase.from("wrong_notes").select("words").eq("user_id", userId).maybeSingle();
   if (error || !data) return [];
@@ -52,7 +52,7 @@ export async function loadWrongNotes(userId: string): Promise<WordEntry[]> {
 
 export async function saveWrongNotes(userId: string, words: WordEntry[]): Promise<boolean> {
   if (!userId) return false;
-  const supabase = getSupabase();
+  const supabase = await getSupabaseAsync();
   if (!supabase) return false;
   const seen = new Set<string>();
   const deduped: WordEntry[] = [];
@@ -87,7 +87,7 @@ export async function removeWordFromWrongNotes(userId: string, word: WordEntry):
 
 export async function appendStudyStat(userId: string, part: "practice" | "exam", total: number, correct: number): Promise<void> {
   if (!userId) return;
-  const supabase = getSupabase();
+  const supabase = await getSupabaseAsync();
   if (!supabase) return;
   const date = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }); // YYYY-MM-DD
   await supabase.from("study_stats").insert({ user_id: userId, date, part, total, correct });
@@ -95,7 +95,7 @@ export async function appendStudyStat(userId: string, part: "practice" | "exam",
 
 export async function loadStudyStats(userId: string): Promise<StudyStatRecord[]> {
   if (!userId) return [];
-  const supabase = getSupabase();
+  const supabase = await getSupabaseAsync();
   if (!supabase) return [];
   const { data, error } = await supabase
     .from("study_stats")
@@ -107,6 +107,6 @@ export async function loadStudyStats(userId: string): Promise<StudyStatRecord[]>
   return data as StudyStatRecord[];
 }
 
-export function isSyncEnabled(): boolean {
-  return getSupabase() !== null;
+export async function isSyncEnabled(): Promise<boolean> {
+  return (await getSupabaseAsync()) !== null;
 }

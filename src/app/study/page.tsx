@@ -10,7 +10,7 @@ import KeyBadge from "@/components/KeyBadge";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
-import { fetchRadicalWords, fetchWords } from "@/lib/api";
+import { fetchWords } from "@/lib/api";
 import { shuffle } from "@/lib/queue";
 import { deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
 import { FileRef, StudyProgress, WordEntry } from "@/lib/types";
@@ -26,7 +26,6 @@ export default function StudyPage() {
   const [words, setWords] = useState<WordEntry[]>([]);
   const [index, setIndex] = useState(0);
   const [showHint, setShowHint] = useState(false);
-  const [isRadicals, setIsRadicals] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -36,25 +35,23 @@ export default function StudyPage() {
     });
   }, [ready, userId]);
 
-  async function begin(radicals: boolean) {
+  async function begin() {
     if (selectedFiles.length === 0) return;
     setStarting(true);
     const paths = selectedFiles.map((f) => f.path);
-    const list = radicals ? await fetchRadicalWords(paths) : await fetchWords(paths);
+    const list = await fetchWords(paths);
     setStarting(false);
     if (list.length === 0) return;
     const pool = shuffle(list);
     setWords(pool);
     setIndex(0);
     setShowHint(false);
-    setIsRadicals(radicals);
     setFocus(true);
     if (userId) {
       saveProgress(userId, "study", {
         words: pool,
         filesLabel: selectedFiles.map((f) => f.label),
         studyIndex: 0,
-        wordsAreRadicals: radicals,
       } as StudyProgress);
     }
   }
@@ -63,7 +60,6 @@ export default function StudyPage() {
     if (!saved) return;
     setWords(saved.words);
     setIndex(saved.studyIndex);
-    setIsRadicals(saved.wordsAreRadicals);
     setShowHint(false);
     setFocus(true);
   }
@@ -76,7 +72,6 @@ export default function StudyPage() {
         words,
         filesLabel: selectedFiles.map((f) => f.label) ?? saved?.filesLabel ?? [],
         studyIndex: nextIndex,
-        wordsAreRadicals: isRadicals,
       } as StudyProgress);
     }
   }
@@ -223,14 +218,9 @@ export default function StudyPage() {
         <FileSelector onSelectionChange={setSelectedFiles} />
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3">
-        <button onClick={() => begin(false)} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent">
-          {starting ? "불러오는 중..." : "학습 시작"}
-        </button>
-        <button onClick={() => begin(true)} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-blue">
-          부수만 모아서 학습
-        </button>
-      </div>
+      <button onClick={begin} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent mt-5 w-full">
+        {starting ? "불러오는 중..." : "학습 시작"}
+      </button>
     </div>
   );
 }
