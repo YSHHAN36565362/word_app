@@ -2,7 +2,7 @@
   "name": "단어장 - 매일 조금씩 확실하게",
   "short_name": "단어장",
   "description": "GitHub 단어장 + 망각곡선 연습 + 시험 + 오답노트",
-  "start_url": "/study",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f7f7fb",
