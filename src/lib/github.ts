@@ -50,20 +50,38 @@ export interface GhContentItem {
 export async function githubGetContents(
   path: string,
   revalidateSeconds = 300
-): Promise<{ status: number; data: GhContentItem[] | (GhContentItem & { content?: string }) | null }> {
-  const url = `https://api.github.com/repos/${owner()}/${repo()}/contents/${encodePath(
-    path
-  )}?ref=${encodeURIComponent(branch())}`;
+): Promise<{ status: number; data: GhContentItem[] | (GhContentItem & { content?: string }) | null; error?: string }> {
+  let url: string;
+  try {
+    // owner()/repo()가 필요한 환경변수(GITHUB_OWNER/GITHUB_REPO)를 요구하는데, 이 호출을
+    // try 밖에 두면 env가 비어있을 때 던지는 예외가 라우트 핸들러까지 그대로 올라가
+    // API 전체가 500으로 죽는다(빈 목록이 아니라 페이지 자체가 깨짐). 여기서 잡아서
+    // 항상 {status, data} 형태로만 돌려주도록 한다.
+    url = `https://api.github.com/repos/${owner()}/${repo()}/contents/${encodePath(
+      path
+    )}?ref=${encodeURIComponent(branch())}`;
+  } catch (e) {
+    return { status: -1, data: null, error: e instanceof Error ? e.message : "GitHub 설정 오류" };
+  }
   try {
     const res = await fetch(url, {
       headers: headers(),
       next: { revalidate: revalidateSeconds },
     });
-    if (res.status !== 200) return { status: res.status, data: null };
+    if (res.status !== 200) {
+      let error: string | undefined;
+      try {
+        const body = await res.json();
+        error = body?.message;
+      } catch {
+        /* 응답이 JSON이 아니면 무시 */
+      }
+      return { status: res.status, data: null, error };
+    }
     const data = await res.json();
     return { status: res.status, data };
   } catch {
-    return { status: 0, data: null };
+    return { status: 0, data: null, error: "GitHub API 요청에 실패했습니다 (네트워크 오류)." };
   }
 }
 

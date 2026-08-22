@@ -21,6 +21,7 @@ export default function FileSelector({ onSelectionChange }: Props) {
       .then((r) => r.json())
       .then((data: WordTree) => {
         setTree(data);
+        if (data.error) setError(data.error);
         if (data.categories.length > 0) {
           setMainCat(data.categories[0].name);
           setSelectedSubs(new Set(data.categories[0].subfolders.map((s) => s.name)));

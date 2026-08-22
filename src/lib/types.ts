@@ -23,6 +23,7 @@ export interface CategoryNode {
 
 export interface WordTree {
   categories: CategoryNode[];
+  error?: string;
 }
 
 export type StudyMode = "word_only" | "meaning_only" | "random";
