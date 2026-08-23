@@ -9,15 +9,16 @@ interface Props {
   ready: boolean;
   part: Part;
   selectedFiles: FileRef[];
-  onRestore?: (paths: string[]) => void;
+  onRestore?: (paths: string[], mode: string | null) => void;
 }
 
 /**
  * 파일 선택 버튼들 바로 아래에 두는 요약 패널.
  * "내 번호 / 선택한 파일 / 최근 학습 시간 / 진행률"을 보여주고, 이 파트에서 예전에
- * 공부했던 다른 파일 조합들을 드롭다운으로 훑어볼 수 있다. 과거 기록을 고르면 그
- * 조합의 진행 상황을 미리 보여주고, [이 학습 다시 하기] 버튼으로 그 파일 조합을
- * 실제 체크박스 선택 상태로 복원할 수 있다.
+ * 공부했던 다른 파일 조합들을 드롭다운으로 훑어볼 수 있다. 드롭다운 바로 아래에는
+ * (현재 선택 기준이든 과거 기록이든) 화면에 표시 중인 조합에 기록이 있으면 항상 같은
+ * 자리에 [이 학습 다시 하기] 버튼이 뜬다 — 누르면 그 파일 조합과 마지막 모드로 곧장
+ * 단어 화면까지 자동 진입한다.
  */
 export default function SessionInfoPanel({ userId, ready, part, selectedFiles, onRestore }: Props) {
   const [logs, setLogs] = useState<LearningLogEntry[]>([]);
@@ -84,13 +85,13 @@ export default function SessionInfoPanel({ userId, ready, part, selectedFiles, o
             ))}
           </select>
 
-          {viewed && onRestore && (
+          {displayLog && onRestore && (
             <button
               onClick={() => {
-                onRestore(viewed.fileKey.split("|"));
+                onRestore(displayLog.fileKey.split("|"), displayLog.mode);
                 setViewingKey("");
               }}
-              className="btn-3d btn-ghost mt-2 w-full py-1.5 text-xs"
+              className="btn-3d btn-blue mt-2 w-full py-1.5 text-xs"
             >
               이 학습 다시 하기
             </button>

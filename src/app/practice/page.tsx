@@ -19,10 +19,19 @@ import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, shuffle } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, loadProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
 import { loadAllMastery, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
-import { fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
+import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
 
 const WRONG_NOTES_PATH_KEY = "__wrong_notes__";
+
+interface RestoreRequest {
+  paths: string[];
+  mode: StudyMode;
+}
+
+function isStudyMode(v: string | null): v is StudyMode {
+  return v === "word_only" || v === "meaning_only" || v === "random";
+}
 
 export default function PracticePage() {
   return (
@@ -39,7 +48,7 @@ function PracticePageInner() {
   const fromWrongNotes = searchParams.get("from") === "wrongnotes";
 
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
-  const [restorePaths, setRestorePaths] = useState<string[] | null>(null);
+  const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
   const [starting, setStarting] = useState(false);
   const [saved, setSaved] = useState<PracticeProgress | null>(null);
 
@@ -81,7 +90,7 @@ function PracticePageInner() {
       totalCount: next.total,
       doneCount: next.done,
     } as PracticeProgress);
-    upsertLearningLog(userId, "practice", next.paths, fileSummaryOf(next.labels), next.total, next.done);
+    upsertLearningLog(userId, "practice", next.paths, fileSummaryOf(next.labels), next.total, next.done, next.m);
   }
 
   function startWithList(list: WordEntry[], mastery: Map<string, number>, selectedMode: StudyMode, labels: string[], paths: string[]) {
@@ -122,6 +131,23 @@ function PracticePageInner() {
     startWithList(list, mastery, selectedMode, labels, paths);
     setStarting(false);
   }
+
+  // [이 학습 다시 하기]로 복원 요청이 들어오면, FileSelector가 그 파일들을 실제
+  // 체크박스 선택(selectedFiles)으로 반영할 때까지 기다렸다가 저장돼 있던 모드로
+  // 자동으로 연습을 시작한다. (기록에 있던 파일이 GitHub에서 지워졌다면 완전히 같은
+  // 조합이 되지 않을 수 있어 fileKey가 정확히 일치할 때만 시작한다.)
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!restoreRequest || selectedFiles.length === 0) return;
+    const selectedKey = fileKeyOf(selectedFiles.map((f) => f.path));
+    const targetKey = fileKeyOf(restoreRequest.paths);
+    if (selectedKey !== targetKey) return;
+    const modeToStart = restoreRequest.mode;
+    setRestoreRequest(null);
+    begin(modeToStart);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFiles, restoreRequest]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   async function beginFromWrongNotes() {
     if (!userId) return;
@@ -346,7 +372,7 @@ function PracticePageInner() {
       )}
 
       <div className="mt-5">
-        <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restorePaths} />
+        <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restoreRequest?.paths ?? null} />
       </div>
 
       <div className="mt-5 grid grid-cols-3 gap-2">
@@ -366,7 +392,7 @@ function PracticePageInner() {
         ready={ready}
         part="practice"
         selectedFiles={selectedFiles}
-        onRestore={setRestorePaths}
+        onRestore={(paths, mode) => setRestoreRequest({ paths, mode: isStudyMode(mode) ? mode : "random" })}
       />
     </div>
   );

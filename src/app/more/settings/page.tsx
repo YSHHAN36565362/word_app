@@ -4,6 +4,14 @@ import { useEffect, useState } from "react";
 import { useUserId } from "@/hooks/useUserId";
 import { useTheme } from "@/contexts/ThemeContext";
 import { isSyncEnabled } from "@/lib/progress";
+import { deleteLearningLog, formatKstDateTime, listAllLearningLogs, LearningLogEntryWithPart, Part } from "@/lib/learningLog";
+
+const PART_LABEL: Record<Part, string> = {
+  study: "학습",
+  practice: "연습",
+  exam: "시험",
+  script: "지문",
+};
 
 export default function SettingsPage() {
   const { userId, setUserId, ready } = useUserId();
@@ -11,6 +19,9 @@ export default function SettingsPage() {
   const [input, setInput] = useState("");
   const [touched, setTouched] = useState(false);
   const [syncEnabled, setSyncEnabled] = useState(false);
+  const [logs, setLogs] = useState<LearningLogEntryWithPart[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [deletingKey, setDeletingKey] = useState<string>("");
 
   const displayValue = touched ? input : userId;
 
@@ -19,6 +30,26 @@ export default function SettingsPage() {
     // 만들면 잘못된 URL 등으로 빌드가 깨질 수 있음) 마운트 후에만 확인한다.
     isSyncEnabled().then(setSyncEnabled);
   }, []);
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!ready || !userId) return;
+    setLogsLoading(true);
+    listAllLearningLogs(userId).then((data) => {
+      setLogs(data);
+      setLogsLoading(false);
+    });
+  }, [ready, userId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  async function handleDeleteLog(entry: LearningLogEntryWithPart) {
+    const key = `${entry.part}::${entry.fileKey}`;
+    if (!window.confirm(`"${entry.fileSummary}" (${PART_LABEL[entry.part]}) 학습 기록을 삭제할까요?\n진행률과 최근 학습 시간이 초기화됩니다.`)) return;
+    setDeletingKey(key);
+    await deleteLearningLog(userId, entry.part, entry.fileKey);
+    setLogs((prev) => prev.filter((l) => !(l.part === entry.part && l.fileKey === entry.fileKey)));
+    setDeletingKey("");
+  }
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
@@ -72,6 +103,66 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {ready && userId && (
+        <div className="mt-4 study-card p-4">
+          <div className="text-sm font-bold">학습 기록 관리</div>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+            파일을 잘못 체크했거나 특정 조합의 진도를 리셋하고 싶을 때 개별로 삭제할 수 있습니다.
+          </p>
+
+          {logsLoading && (
+            <div className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
+              불러오는 중...
+            </div>
+          )}
+
+          {!logsLoading && logs.length === 0 && (
+            <div className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
+              저장된 학습 기록이 없습니다.
+            </div>
+          )}
+
+          {!logsLoading && logs.length > 0 && (
+            <div className="mt-3 flex flex-col gap-2">
+              {logs.map((entry) => {
+                const key = `${entry.part}::${entry.fileKey}`;
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5"
+                    style={{ background: "var(--hint-bg)" }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span
+                          className="shrink-0 rounded-full px-1.5 py-0.5 font-bold"
+                          style={{ background: "var(--card)", color: "var(--text-muted)" }}
+                        >
+                          {PART_LABEL[entry.part]}
+                        </span>
+                        <span className="truncate font-bold" title={entry.fileSummary}>
+                          {entry.fileSummary}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                        {formatKstDateTime(entry.updatedAt)} · {entry.doneCount} / {entry.totalCount}개
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteLog(entry)}
+                      disabled={deletingKey === key}
+                      className="btn-3d btn-red shrink-0 px-3 py-1.5 text-xs"
+                    >
+                      {deletingKey === key ? "삭제 중..." : "삭제"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

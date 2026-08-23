@@ -56,9 +56,15 @@ create table if not exists learning_log (
   file_summary text not null,
   total_count int not null default 0,
   done_count int not null default 0,
+  mode text,
   updated_at timestamptz not null default now(),
   primary key (user_id, part, file_key)
 );
+
+-- 이미 만들어진 테이블에도 mode 컬럼을 추가한다(기존 배포에 대한 마이그레이션).
+-- 연습 모드(word_only/meaning_only/random)를 기록해서, "이 학습 다시 하기"를 누르면
+-- 파일 선택뿐 아니라 마지막으로 하던 모드로 곧장 이어서 시작할 수 있게 한다.
+alter table learning_log add column if not exists mode text;
 
 create index if not exists learning_log_user_part_idx on learning_log (user_id, part, updated_at desc);
 

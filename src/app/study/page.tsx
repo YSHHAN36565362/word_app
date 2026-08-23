@@ -15,15 +15,19 @@ import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { shuffle } from "@/lib/queue";
 import { deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
-import { fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
+import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { FileRef, StudyProgress, WordEntry } from "@/lib/types";
+
+interface RestoreRequest {
+  paths: string[];
+}
 
 export default function StudyPage() {
   const { focus, setFocus } = useFocusMode();
   const { userId, ready } = useUserId();
 
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
-  const [restorePaths, setRestorePaths] = useState<string[] | null>(null);
+  const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
   const [starting, setStarting] = useState(false);
   const [saved, setSaved] = useState<StudyProgress | null>(null);
 
@@ -66,6 +70,22 @@ export default function StudyPage() {
       upsertLearningLog(userId, "study", paths, fileSummaryOf(labels), pool.length, 0);
     }
   }
+
+  // [이 학습 다시 하기]로 복원 요청이 들어오면, FileSelector가 그 파일들을 실제
+  // 체크박스 선택(selectedFiles)으로 반영할 때까지 기다렸다가 자동으로 학습을 시작한다.
+  // (기록에 있던 파일이 GitHub에서 지워졌다면 완전히 같은 조합이 되지 않을 수 있어
+  // fileKey가 정확히 일치할 때만 시작한다 — 엉뚱한 파일로 잘못 시작하지 않기 위함.)
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!restoreRequest || selectedFiles.length === 0) return;
+    const selectedKey = fileKeyOf(selectedFiles.map((f) => f.path));
+    const targetKey = fileKeyOf(restoreRequest.paths);
+    if (selectedKey !== targetKey) return;
+    setRestoreRequest(null);
+    begin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFiles, restoreRequest]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function resume() {
     if (!saved) return;
@@ -232,7 +252,7 @@ export default function StudyPage() {
       )}
 
       <div className="mt-5">
-        <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restorePaths} />
+        <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restoreRequest?.paths ?? null} />
       </div>
 
       <button onClick={begin} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent mt-5 w-full">
@@ -251,7 +271,7 @@ export default function StudyPage() {
         ready={ready}
         part="study"
         selectedFiles={selectedFiles}
-        onRestore={setRestorePaths}
+        onRestore={(paths) => setRestoreRequest({ paths })}
       />
     </div>
   );
