@@ -10,14 +10,19 @@ import ProgressBar from "@/components/ProgressBar";
 import FlashCard from "@/components/FlashCard";
 import KeyBadge from "@/components/KeyBadge";
 import Mascot, { MascotState } from "@/components/Mascot";
+import Spinner from "@/components/Spinner";
+import SessionInfoPanel from "@/components/SessionInfoPanel";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, shuffle } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, loadProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
-import { loadMasteryMap, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
+import { loadAllMastery, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
+import { fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
+
+const WRONG_NOTES_PATH_KEY = "__wrong_notes__";
 
 export default function PracticePage() {
   return (
@@ -48,6 +53,7 @@ function PracticePageInner() {
   const [mascotState, setMascotState] = useState<MascotState>("idle");
   const [resultSaved, setResultSaved] = useState(false);
   const [filesLabel, setFilesLabel] = useState<string[]>([]);
+  const [activeFilePaths, setActiveFilePaths] = useState<string[]>([]);
   // 단어가 바뀔 때마다 1씩 늘려서 FlashCard의 key로 쓴다. 뒤집기(showAnswer)를 false로
   // 되돌리는 것과 카드 내용을 새 단어로 바꾸는 것이 "같은 렌더"에서 같이 일어나면,
   // 뒤집는 CSS 애니메이션이 절반쯤 진행된 상태에서 뒷면 내용만 먼저 새 단어로 바뀌어
@@ -62,10 +68,11 @@ function PracticePageInner() {
     });
   }, [ready, userId]);
 
-  function persist(next: { queue: WordEntry[]; current: WordEntry | null; total: number; done: number; side: 0 | 1; m: StudyMode; labels: string[] }) {
+  function persist(next: { queue: WordEntry[]; current: WordEntry | null; total: number; done: number; side: 0 | 1; m: StudyMode; labels: string[]; paths: string[] }) {
     if (!userId) return;
     saveProgress(userId, "practice", {
       filesLabel: next.labels,
+      filePaths: next.paths,
       mode: next.m,
       queue: next.queue,
       currentWord: next.current,
@@ -73,15 +80,13 @@ function PracticePageInner() {
       totalCount: next.total,
       doneCount: next.done,
     } as PracticeProgress);
+    upsertLearningLog(userId, "practice", next.paths, fileSummaryOf(next.labels), next.total, next.done);
   }
 
-  async function startWithList(list: WordEntry[], selectedMode: StudyMode, labels: string[]) {
+  function startWithList(list: WordEntry[], mastery: Map<string, number>, selectedMode: StudyMode, labels: string[], paths: string[]) {
     if (list.length === 0) return;
-    let pool = shuffle(list);
-    if (userId) {
-      const mastery = await loadMasteryMap(userId, pool);
-      pool = prioritizeByMastery(pool, mastery);
-    }
+    const shuffled = shuffle(list);
+    const pool = mastery.size > 0 ? prioritizeByMastery(shuffled, mastery) : shuffled;
     const q = [...pool];
     const first = q.shift() ?? null;
     const side = getDisplaySide(selectedMode);
@@ -97,27 +102,31 @@ function PracticePageInner() {
     setResultSaved(false);
     setMascotState("idle");
     setFilesLabel(labels);
+    setActiveFilePaths(paths);
     setTurnId((t) => t + 1);
     setFocus(true);
 
-    persist({ queue: q, current: first, total: pool.length, done: 0, side, m: selectedMode, labels });
+    persist({ queue: q, current: first, total: pool.length, done: 0, side, m: selectedMode, labels, paths });
   }
 
   async function begin(selectedMode: StudyMode) {
     if (selectedFiles.length === 0) return;
     setStarting(true);
     const paths = selectedFiles.map((f) => f.path);
-    const list = await fetchWords(paths);
     const labels = selectedFiles.map((f) => f.label);
-    await startWithList(list, selectedMode, labels);
+    // 단어 목록(GitHub)과 숙련도 기록(Supabase)은 서로 무관한 데이터라 동시에 요청한다.
+    // 이전에는 단어 목록을 다 받은 "다음에야" 숙련도를 조회해서(waterfall) 그만큼 더
+    // 느렸다 — 이게 최근 체감 지연의 주요 원인이었다.
+    const [list, mastery] = await Promise.all([fetchWords(paths), userId ? loadAllMastery(userId) : Promise.resolve(new Map<string, number>())]);
+    startWithList(list, mastery, selectedMode, labels, paths);
     setStarting(false);
   }
 
   async function beginFromWrongNotes() {
     if (!userId) return;
     setStarting(true);
-    const list = await loadWrongNotes(userId);
-    await startWithList(list, "random", ["오답 노트"]);
+    const [list, mastery] = await Promise.all([loadWrongNotes(userId), loadAllMastery(userId)]);
+    startWithList(list, mastery, "random", ["오답 노트"], [WRONG_NOTES_PATH_KEY]);
     setStarting(false);
   }
 
@@ -133,6 +142,7 @@ function PracticePageInner() {
     setShowHint(false);
     setResultSaved(false);
     setFilesLabel(saved.filesLabel);
+    setActiveFilePaths(saved.filePaths ?? []);
     setTurnId((t) => t + 1);
     setFocus(true);
   }
@@ -164,7 +174,7 @@ function PracticePageInner() {
     setShowHint(false);
     setTurnId((t) => t + 1);
 
-    persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, labels: filesLabel });
+    persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, labels: filesLabel, paths: activeFilePaths });
     if (userId) saveWordMastery(userId, current, level);
   }
 
@@ -322,7 +332,14 @@ function PracticePageInner() {
         <div className="mt-4 study-card p-4">
           <div className="text-sm">오답 노트에 있는 단어로 바로 연습을 시작합니다.</div>
           <button onClick={beginFromWrongNotes} disabled={starting} className="btn-3d btn-red mt-3 w-full">
-            {starting ? "불러오는 중..." : "오답 노트로 연습 시작"}
+            {starting ? (
+              <>
+                <Spinner size={16} className="mr-2" />
+                불러오는 중...
+              </>
+            ) : (
+              "오답 노트로 연습 시작"
+            )}
           </button>
         </div>
       )}
@@ -333,15 +350,17 @@ function PracticePageInner() {
 
       <div className="mt-5 grid grid-cols-3 gap-2">
         <button onClick={() => begin("word_only")} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
-          이름만
+          {starting ? <Spinner size={14} /> : "이름만"}
         </button>
         <button onClick={() => begin("meaning_only")} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
-          뜻만
+          {starting ? <Spinner size={14} /> : "뜻만"}
         </button>
         <button onClick={() => begin("random")} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
-          랜덤
+          {starting ? <Spinner size={14} /> : "랜덤"}
         </button>
       </div>
+
+      <SessionInfoPanel userId={userId} ready={ready} part="practice" selectedFiles={selectedFiles} />
     </div>
   );
 }

@@ -43,6 +43,25 @@ create table if not exists word_mastery (
 
 create index if not exists word_mastery_user_id_idx on word_mastery (user_id);
 
+-- 파일 조합별 진행 기록 요약. progress 테이블은 "진행 중인 세션 딱 1개"만 담고 완료하면
+-- 지워지는 데 반해, 이 테이블은 (user_id, part, file_key) 조합마다 별도 행으로 남아서
+-- - 같은 파트라도 어떤 파일 묶음으로 공부했는지에 따라 독립적으로 진행률/시각을 보여주고
+-- - 완료된 뒤에도 "최근 학습 시간"과 마지막 진행률이 남아있고
+-- - 과거에 공부했던 다른 파일 묶음들을 드롭다운으로 훑어볼 수 있게 한다.
+-- file_key는 선택한 파일 경로들을 정렬해서 이어붙인 값(순서 무관, 같은 조합이면 항상 같은 key).
+create table if not exists learning_log (
+  user_id text not null,
+  part text not null check (part in ('study', 'practice', 'exam', 'script')),
+  file_key text not null,
+  file_summary text not null,
+  total_count int not null default 0,
+  done_count int not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, part, file_key)
+);
+
+create index if not exists learning_log_user_part_idx on learning_log (user_id, part, updated_at desc);
+
 -- Row Level Security: anon key로 접근하는 클라이언트 전용 테이블이므로,
 -- 익명 역할(anon)에 전체 CRUD를 허용한다. (실 서비스 수준 보안은 아니며,
 -- 기존 앱의 "번호만 알면 됨" 신뢰 모델을 그대로 웹으로 옮긴 것)
@@ -50,6 +69,7 @@ alter table progress enable row level security;
 alter table wrong_notes enable row level security;
 alter table study_stats enable row level security;
 alter table word_mastery enable row level security;
+alter table learning_log enable row level security;
 
 drop policy if exists "anon full access" on progress;
 create policy "anon full access" on progress for all to anon using (true) with check (true);
@@ -62,3 +82,6 @@ create policy "anon full access" on study_stats for all to anon using (true) wit
 
 drop policy if exists "anon full access" on word_mastery;
 create policy "anon full access" on word_mastery for all to anon using (true) with check (true);
+
+drop policy if exists "anon full access" on learning_log;
+create policy "anon full access" on learning_log for all to anon using (true) with check (true);

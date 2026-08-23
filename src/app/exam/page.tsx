@@ -9,13 +9,14 @@ import ProgressBar from "@/components/ProgressBar";
 import FlashCard from "@/components/FlashCard";
 import KeyBadge from "@/components/KeyBadge";
 import Mascot, { MascotState } from "@/components/Mascot";
+import Spinner from "@/components/Spinner";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, shuffle } from "@/lib/queue";
 import { addWordsToWrongNotes, appendStudyStat, deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
-import { loadMasteryMap, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
+import { loadAllMastery, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { ExamProgress, FileRef, StudyMode, WordEntry } from "@/lib/types";
 
 export default function ExamPage() {
@@ -24,6 +25,8 @@ export default function ExamPage() {
 
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [availableWords, setAvailableWords] = useState<WordEntry[]>([]);
+  const [masteryMap, setMasteryMap] = useState<Map<string, number>>(new Map());
+  const [loadingWords, setLoadingWords] = useState(false);
   const [countInput, setCountInput] = useState(10);
   const [saved, setSaved] = useState<ExamProgress | null>(null);
 
@@ -56,13 +59,21 @@ export default function ExamPage() {
       // 파일 선택이 비면 이전 목록을 즉시 비워 화면에 낡은 개수가 남지 않게 한다.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setAvailableWords([]);
+      setMasteryMap(new Map());
       return;
     }
-    fetchWords(selectedFiles.map((f) => f.path)).then((list) => {
-      setAvailableWords(list);
-      setCountInput((c) => Math.max(1, Math.min(c, list.length)));
-    });
-  }, [selectedFiles]);
+    setLoadingWords(true);
+    // 단어 목록(GitHub)과 숙련도 기록(Supabase)을 동시에 미리 받아둔다 — 파일을 고른
+    // 시점에 끝내두면, 나중에 [이름만/뜻만/랜덤 시험] 버튼을 눌렀을 때 기다릴 게 없다.
+    Promise.all([fetchWords(selectedFiles.map((f) => f.path)), userId ? loadAllMastery(userId) : Promise.resolve(new Map<string, number>())]).then(
+      ([list, mastery]) => {
+        setAvailableWords(list);
+        setMasteryMap(mastery);
+        setCountInput((c) => Math.max(1, Math.min(c, list.length)));
+        setLoadingWords(false);
+      }
+    );
+  }, [selectedFiles, userId]);
 
   function persist(next: {
     queue: WordEntry[];
@@ -89,14 +100,13 @@ export default function ExamPage() {
     } as ExamProgress);
   }
 
-  async function begin(selectedMode: StudyMode) {
+  function begin(selectedMode: StudyMode) {
     if (availableWords.length === 0) return;
     let pool = shuffle(availableWords);
-    if (userId) {
-      const mastery = await loadMasteryMap(userId, pool);
+    if (masteryMap.size > 0) {
       // 점수가 낮은(약한) 단어부터 뽑히도록 정렬한 뒤, 그중 출제 개수만큼 골라서
       // 다시 섞는다 — "약한 단어 위주로 출제되지만 순서는 무작위"가 된다.
-      pool = prioritizeByMastery(pool, mastery);
+      pool = prioritizeByMastery(pool, masteryMap);
     }
     const count = Math.min(countInput, pool.length);
     const examWords = shuffle(pool.slice(0, count));
@@ -340,7 +350,14 @@ export default function ExamPage() {
         <FileSelector onSelectionChange={setSelectedFiles} />
       </div>
 
-      {availableWords.length > 0 && (
+      {loadingWords && (
+        <div className="mt-4 flex items-center justify-center gap-2 py-3 text-sm" style={{ color: "var(--text-muted)" }}>
+          <Spinner size={16} />
+          단어 불러오는 중...
+        </div>
+      )}
+
+      {!loadingWords && availableWords.length > 0 && (
         <>
           <div className="mt-5 flex items-center gap-3">
             <label className="text-sm font-bold" style={{ color: "var(--text-muted)" }}>

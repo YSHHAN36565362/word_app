@@ -7,12 +7,15 @@ import ExitFocusButton from "@/components/ExitFocusButton";
 import FocusScreen from "@/components/FocusScreen";
 import ProgressBar from "@/components/ProgressBar";
 import KeyBadge from "@/components/KeyBadge";
+import Spinner from "@/components/Spinner";
+import SessionInfoPanel from "@/components/SessionInfoPanel";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { shuffle } from "@/lib/queue";
 import { deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
+import { fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { FileRef, StudyProgress, WordEntry } from "@/lib/types";
 
 export default function StudyPage() {
@@ -27,6 +30,8 @@ export default function StudyPage() {
   const [index, setIndex] = useState(0);
   const [showHint, setShowHint] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [activeFilePaths, setActiveFilePaths] = useState<string[]>([]);
+  const [activeFileLabels, setActiveFileLabels] = useState<string[]>([]);
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -39,6 +44,7 @@ export default function StudyPage() {
     if (selectedFiles.length === 0) return;
     setStarting(true);
     const paths = selectedFiles.map((f) => f.path);
+    const labels = selectedFiles.map((f) => f.label);
     const list = await fetchWords(paths);
     setStarting(false);
     if (list.length === 0) return;
@@ -46,13 +52,17 @@ export default function StudyPage() {
     setWords(pool);
     setIndex(0);
     setShowHint(false);
+    setActiveFilePaths(paths);
+    setActiveFileLabels(labels);
     setFocus(true);
     if (userId) {
       saveProgress(userId, "study", {
         words: pool,
-        filesLabel: selectedFiles.map((f) => f.label),
+        filesLabel: labels,
+        filePaths: paths,
         studyIndex: 0,
       } as StudyProgress);
+      upsertLearningLog(userId, "study", paths, fileSummaryOf(labels), pool.length, 0);
     }
   }
 
@@ -61,6 +71,8 @@ export default function StudyPage() {
     setWords(saved.words);
     setIndex(saved.studyIndex);
     setShowHint(false);
+    setActiveFilePaths(saved.filePaths ?? []);
+    setActiveFileLabels(saved.filesLabel ?? []);
     setFocus(true);
   }
 
@@ -70,9 +82,13 @@ export default function StudyPage() {
     if (userId) {
       saveProgress(userId, "study", {
         words,
-        filesLabel: selectedFiles.map((f) => f.label) ?? saved?.filesLabel ?? [],
+        filesLabel: activeFileLabels,
+        filePaths: activeFilePaths,
         studyIndex: nextIndex,
       } as StudyProgress);
+      if (activeFilePaths.length > 0) {
+        upsertLearningLog(userId, "study", activeFilePaths, fileSummaryOf(activeFileLabels), words.length, Math.min(nextIndex, words.length));
+      }
     }
   }
 
@@ -219,8 +235,17 @@ export default function StudyPage() {
       </div>
 
       <button onClick={begin} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent mt-5 w-full">
-        {starting ? "불러오는 중..." : "학습 시작"}
+        {starting ? (
+          <>
+            <Spinner size={16} className="mr-2" />
+            불러오는 중...
+          </>
+        ) : (
+          "학습 시작"
+        )}
       </button>
+
+      <SessionInfoPanel userId={userId} ready={ready} part="study" selectedFiles={selectedFiles} />
     </div>
   );
 }

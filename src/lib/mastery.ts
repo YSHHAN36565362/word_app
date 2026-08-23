@@ -6,22 +6,42 @@ import { wordKey } from "./queue";
 
 const UNSEEN_PRIORITY = 50; // 한 번도 채점 기록이 없는 단어. 0/40(약함)보다는 뒤, 60/100(잘 앎)보다는 앞.
 
-/** 주어진 단어들 중, 이 사용자가 이전에 채점한 기록이 있는 것만 word_key -> 최신 점수로 돌려준다. */
-export async function loadMasteryMap(userId: string, words: WordEntry[]): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  if (!userId || words.length === 0) return map;
-  const supabase = await getSupabaseAsync();
-  if (!supabase) return map;
-  const keys = Array.from(new Set(words.map(wordKey)));
-  const { data, error } = await supabase.from("word_mastery").select("word_key, score").eq("user_id", userId).in("word_key", keys);
-  if (error || !data) return map;
-  for (const row of data as { word_key: string; score: number }[]) map.set(row.word_key, row.score);
-  return map;
+// userId -> 진행 중인/최근 완료된 조회 Promise. 같은 사용자에 대해 짧은 시간 안에 여러 곳
+// (연습 시작, 시험 파일목록 로드 등)에서 동시에 부르더라도 실제 네트워크 요청은 한 번만 나가게 한다.
+const cache = new Map<string, { promise: Promise<Map<string, number>>; at: number }>();
+const CACHE_TTL_MS = 15000;
+
+/**
+ * 이 사용자의 모든 단어별 최신 점수를 한 번에 불러온다. 어떤 단어들이 필요한지 미리
+ * 알 필요가 없어서(word_key로 필터하지 않음), 단어 목록을 불러오는 fetchWords()와
+ * Promise.all로 동시에 실행할 수 있다 — 이전에는 단어 목록을 먼저 받은 뒤에야 그 안의
+ * word_key로 필터링해서 조회했기 때문에, 두 네트워크 요청이 순서대로(waterfall) 실행돼
+ * 진입 속도가 느려지는 원인이었다.
+ */
+export async function loadAllMastery(userId: string): Promise<Map<string, number>> {
+  if (!userId) return new Map();
+
+  const cached = cache.get(userId);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.promise;
+
+  const promise = (async () => {
+    const map = new Map<string, number>();
+    const supabase = await getSupabaseAsync();
+    if (!supabase) return map;
+    const { data, error } = await supabase.from("word_mastery").select("word_key, score").eq("user_id", userId);
+    if (error || !data) return map;
+    for (const row of data as { word_key: string; score: number }[]) map.set(row.word_key, row.score);
+    return map;
+  })();
+
+  cache.set(userId, { promise, at: Date.now() });
+  return promise;
 }
 
 /** 채점 직후 그 단어의 최신 점수를 저장한다. 실패해도 학습 흐름은 막지 않는다(fire-and-forget로 호출). */
 export async function saveWordMastery(userId: string, word: WordEntry, score: 0 | 40 | 60 | 100): Promise<void> {
   if (!userId) return;
+  cache.delete(userId); // 다음 세션을 시작할 때는 방금 저장한 점수가 바로 반영되어야 한다.
   const supabase = await getSupabaseAsync();
   if (!supabase) return;
   await supabase

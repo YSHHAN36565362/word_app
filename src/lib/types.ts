@@ -33,11 +33,13 @@ export type ScoreLevel = 100 | 60 | 40 | 0;
 export interface StudyProgress {
   words: WordEntry[];
   filesLabel: string[];
+  filePaths: string[];
   studyIndex: number;
 }
 
 export interface PracticeProgress {
   filesLabel: string[];
+  filePaths: string[];
   mode: StudyMode;
   queue: WordEntry[];
   currentWord: WordEntry | null;
