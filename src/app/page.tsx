@@ -5,8 +5,12 @@ import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { animate } from "animejs";
+import { animate, splitText, stagger } from "animejs";
 import { daysUntilJLPT } from "@/lib/dday";
+
+// splitText로 글자 단위 span을 만든 뒤 이 클래스들을 타겟으로 삼아 위아래로 둥실둥실
+// 계속 움직이게 한다(말풍선들과 같은 "살아있는" 느낌을 D-day 카드에도 준다).
+const FLOAT_KEYFRAMES = ["0em", "-0.2em", "0em"];
 
 const BUBBLES: { text: string; style: CSSProperties }[] = [
   { text: "こんにちは", style: { left: -6, top: 14 } },
@@ -19,6 +23,8 @@ const BUBBLES: { text: string; style: CSSProperties }[] = [
 
 export default function Home() {
   const ddayRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const dateRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // new Date() 기반 계산이라 정적 프리렌더 시점(빌드 시각)이 아니라 마운트 후 실제
@@ -32,6 +38,25 @@ export default function Home() {
     const counter = { value: 0 };
     el.textContent = `${prefix}0`;
 
+    // 라벨/날짜는 값이 바뀌지 않는 고정 텍스트라 바로 글자 단위로 쪼개서 둥실둥실 루프를
+    // 건다(카드 자체는 framer-motion으로 아직 페이드인 전이라 화면엔 늦게 나타나 보인다).
+    const splitters = [
+      { ref: labelRef, className: "dday-label-char" },
+      { ref: dateRef, className: "dday-date-char" },
+    ]
+      .filter((s) => s.ref.current)
+      .map(({ ref, className }) => {
+        const splitter = splitText(ref.current!, { chars: { class: className } });
+        animate(`.${className}`, {
+          y: FLOAT_KEYFRAMES,
+          loop: true,
+          duration: 1400,
+          ease: "inOutSine",
+          delay: stagger(50, { start: 800 }),
+        });
+        return splitter;
+      });
+
     // 전광판이 은은하게 켜지는 느낌의 스케일/오파시티 인트로
     animate(el, {
       opacity: [0, 1],
@@ -41,7 +66,9 @@ export default function Home() {
       ease: "outCubic",
     });
 
-    // 0부터 목표 D-day까지 부드럽게 올라가는 카운트업
+    // 0부터 목표 D-day까지 부드럽게 올라가는 카운트업. 숫자가 계속 바뀌는 동안은
+    // 글자를 쪼개면 매 프레임 span이 다시 만들어지므로, 카운트업이 끝난 뒤에야
+    // D-day 숫자도 같은 방식으로 쪼개서 둥실둥실 루프를 건다.
     animate(counter, {
       value: Math.abs(target),
       duration: 1200,
@@ -50,7 +77,22 @@ export default function Home() {
       onUpdate: () => {
         el.textContent = `${prefix}${Math.round(counter.value)}`;
       },
+      onComplete: () => {
+        const ddaySplitter = splitText(el, { chars: { class: "dday-number-char" } });
+        splitters.push(ddaySplitter);
+        animate(".dday-number-char", {
+          y: FLOAT_KEYFRAMES,
+          loop: true,
+          duration: 1400,
+          ease: "inOutSine",
+          delay: stagger(50),
+        });
+      },
     });
+
+    return () => {
+      for (const s of splitters) s.revert();
+    };
   }, []);
 
   return (
@@ -128,7 +170,7 @@ export default function Home() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.8, type: "spring", stiffness: 200, damping: 20 }}
       >
-        <div className="text-xs font-bold tracking-widest" style={{ color: "#9a9ba8" }}>
+        <div ref={labelRef} className="text-xs font-bold tracking-widest" style={{ color: "#9a9ba8" }}>
           JLPT 시험일까지
         </div>
         <div
@@ -143,7 +185,7 @@ export default function Home() {
         >
           D-—
         </div>
-        <div className="mt-1 text-xs" style={{ color: "#6b6c7a" }}>
+        <div ref={dateRef} className="mt-1 text-xs" style={{ color: "#6b6c7a" }}>
           2026년 12월 6일 (한국 시간 기준)
         </div>
       </motion.div>
