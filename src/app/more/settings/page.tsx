@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useUserId } from "@/hooks/useUserId";
 import { useTheme } from "@/contexts/ThemeContext";
 import { isSyncEnabled } from "@/lib/progress";
 import { deleteLearningLog, formatKstDateTime, listAllLearningLogs, LearningLogEntryWithPart, Part } from "@/lib/learningLog";
-import UsageGuide from "@/components/UsageGuide";
+import PageHeader from "@/components/PageHeader";
 
 const PART_LABEL: Record<Part, string> = {
   study: "학습",
@@ -54,11 +55,20 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-      <h1 className="text-xl font-extrabold">설정</h1>
+      <PageHeader icon="설" accent="#8a8a94" title="설정" />
 
-      <UsageGuide />
+      <Link
+        href="/more/guide"
+        className="mt-4 flex items-center justify-between study-card px-4 py-3 text-sm"
+        style={{ color: "var(--text)" }}
+      >
+        <span>
+          처음이신가요? <span className="font-bold">사용법 설명</span>을 먼저 확인해보세요.
+        </span>
+        <span style={{ color: "var(--text-muted)" }}>›</span>
+      </Link>
 
-      <div className="mt-5 study-card p-4">
+      <div className="mt-4 study-card p-4">
         <div className="text-sm font-bold">화면 테마</div>
         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
           다크 모드 / 라이트 모드를 전환합니다.

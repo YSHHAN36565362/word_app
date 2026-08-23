@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useUserId } from "@/hooks/useUserId";
 import { loadStudyStats } from "@/lib/progress";
 import { StudyStatRecord } from "@/lib/types";
+import PageHeader from "@/components/PageHeader";
 
 export default function StatsPage() {
   const { userId, ready } = useUserId();
@@ -46,7 +47,7 @@ export default function StatsPage() {
   if (ready && !userId) {
     return (
       <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-        <h1 className="text-xl font-extrabold">학습 통계</h1>
+        <PageHeader icon="통" accent="var(--blue)" title="학습 통계" />
         <div className="mt-4 study-card p-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
           학습 통계는{" "}
           <Link href="/more/settings" className="font-bold underline">
@@ -60,10 +61,12 @@ export default function StatsPage() {
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-      <h1 className="text-xl font-extrabold">학습 통계</h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-        연습·시험을 마칠 때마다 자동으로 기록됩니다.
-      </p>
+      <PageHeader
+        icon="통"
+        accent="var(--blue)"
+        title="학습 통계"
+        subtitle="연습·시험을 마칠 때마다 자동으로 기록됩니다."
+      />
 
       {loading ? (
         <div className="mt-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>

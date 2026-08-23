@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useUserId } from "@/hooks/useUserId";
 import { loadWrongNotes, removeWordFromWrongNotes, saveWrongNotes } from "@/lib/progress";
 import { WordEntry } from "@/lib/types";
+import PageHeader from "@/components/PageHeader";
 
 export default function WrongNotesPage() {
   const { userId, ready } = useUserId();
@@ -43,7 +44,7 @@ export default function WrongNotesPage() {
   if (ready && !userId) {
     return (
       <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-        <h1 className="text-xl font-extrabold">오답 노트</h1>
+        <PageHeader icon="오" accent="var(--red)" title="오답 노트" />
         <div className="mt-4 study-card p-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
           오답 노트는{" "}
           <Link href="/more/settings" className="font-bold underline">
@@ -57,10 +58,12 @@ export default function WrongNotesPage() {
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-      <h1 className="text-xl font-extrabold">오답 노트</h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-        시험에서 틀린 단어가 자동으로 여기 쌓입니다.
-      </p>
+      <PageHeader
+        icon="오"
+        accent="var(--red)"
+        title="오답 노트"
+        subtitle="시험에서 틀린 단어가 자동으로 여기 쌓입니다."
+      />
 
       {loading ? (
         <div className="mt-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>

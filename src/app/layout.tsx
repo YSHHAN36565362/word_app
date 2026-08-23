@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { FocusModeProvider } from "@/contexts/FocusModeContext";
 import BottomNav from "@/components/BottomNav";
+import PageTransition from "@/components/PageTransition";
 
 const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
@@ -55,7 +56,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col" style={{ fontFamily: "var(--font-noto-sans-kr), sans-serif" }}>
         <ThemeProvider>
           <FocusModeProvider>
-            <main className="flex-1 pb-24">{children}</main>
+            <main className="flex-1 pb-24">
+              <PageTransition>{children}</PageTransition>
+            </main>
             <BottomNav />
           </FocusModeProvider>
         </ThemeProvider>

@@ -10,6 +10,7 @@ import FlashCard from "@/components/FlashCard";
 import KeyBadge from "@/components/KeyBadge";
 import Mascot, { MascotState } from "@/components/Mascot";
 import Spinner from "@/components/Spinner";
+import PageHeader from "@/components/PageHeader";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
@@ -331,11 +332,13 @@ export default function ExamPage() {
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-      <h1 className="text-xl font-extrabold">시험 파트</h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-        출제 개수를 정하고 O/X로 채점합니다. 틀린 단어는 오답 노트에 자동으로 쌓입니다.
-      </p>
-      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+      <PageHeader
+        icon="시"
+        accent="var(--red)"
+        title="시험 파트"
+        subtitle="출제 개수를 정하고 O/X로 채점합니다. 틀린 단어는 오답 노트에 자동으로 쌓입니다."
+      />
+      <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
         단축키: Space/Enter=정답 확인 · ←=틀림 →=맞음
       </p>
 

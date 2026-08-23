@@ -12,6 +12,7 @@ import KeyBadge from "@/components/KeyBadge";
 import Mascot, { MascotState } from "@/components/Mascot";
 import Spinner from "@/components/Spinner";
 import SessionInfoPanel from "@/components/SessionInfoPanel";
+import PageHeader from "@/components/PageHeader";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
@@ -317,11 +318,13 @@ function PracticePageInner() {
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-      <h1 className="text-xl font-extrabold">연습 파트</h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-        망각 곡선 큐 적용. 4단계로 스스로 채점하면 모르는 단어일수록 더 빨리 다시 만납니다.
-      </p>
-      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+      <PageHeader
+        icon="연"
+        accent="var(--blue)"
+        title="연습 파트"
+        subtitle="망각 곡선 큐 적용. 4단계로 스스로 채점하면 모르는 단어일수록 더 빨리 다시 만납니다."
+      />
+      <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
         단축키: Space/Enter=정답 확인 · 1~4 또는 방향키(←↓↑→)=모름/헷갈림/조금앎/완벽함
       </p>
 

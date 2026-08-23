@@ -9,6 +9,7 @@ import ProgressBar from "@/components/ProgressBar";
 import KeyBadge from "@/components/KeyBadge";
 import Spinner from "@/components/Spinner";
 import SessionInfoPanel from "@/components/SessionInfoPanel";
+import PageHeader from "@/components/PageHeader";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
@@ -227,11 +228,13 @@ export default function StudyPage() {
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-      <h1 className="text-xl font-extrabold">학습 파트</h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-        단어를 순서대로 넘기며 훑어보는 1회독입니다.
-      </p>
-      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+      <PageHeader
+        icon="학"
+        accent="var(--accent)"
+        title="학습 파트"
+        subtitle="단어를 순서대로 넘기며 훑어보는 1회독입니다."
+      />
+      <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
         단축키: ←/→=이전/다음 단어 · H=힌트 보기
       </p>
 

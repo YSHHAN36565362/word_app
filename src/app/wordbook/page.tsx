@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CategoryNode, WordTree } from "@/lib/types";
+import PageHeader from "@/components/PageHeader";
 
 function defaultTitlePrefix(): string {
   const now = new Date();
@@ -74,10 +75,13 @@ export default function WordbookPage() {
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-      <h1 className="text-xl font-extrabold">단어장 추가</h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-        새로운 단어장 파일(.txt)을 GitHub 저장소에 업로드합니다.
-      </p>
+      <PageHeader
+        icon="단"
+        accent="var(--amber)"
+        iconColor="#2b2200"
+        title="단어장 추가"
+        subtitle="새로운 단어장 파일(.txt)을 GitHub 저장소에 업로드합니다."
+      />
 
       {tree && (
         <div className="mt-5 grid grid-cols-2 gap-3">

@@ -7,6 +7,7 @@ import ExitFocusButton from "@/components/ExitFocusButton";
 import FocusScreen from "@/components/FocusScreen";
 import ProgressBar from "@/components/ProgressBar";
 import KeyBadge from "@/components/KeyBadge";
+import PageHeader from "@/components/PageHeader";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
@@ -128,11 +129,13 @@ export default function ScriptPage() {
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-      <h1 className="text-xl font-extrabold">지문 한 줄 외우기</h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-        대화 및 지문을 순서대로 연상하며 외웁니다.
-      </p>
-      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+      <PageHeader
+        icon="지"
+        accent="var(--blue)"
+        title="지문 한 줄 외우기"
+        subtitle="대화 및 지문을 순서대로 연상하며 외웁니다."
+      />
+      <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
         단축키: ←/→=이전/다음 문장
       </p>
 

@@ -3,11 +3,15 @@
 interface GuideItem {
   title: string;
   body: React.ReactNode;
+  image?: string;
+  imageAlt?: string;
 }
 
 const PART_ITEMS: GuideItem[] = [
   {
     title: "학습 — 순서대로 훑어보기",
+    image: "/images/guide/03-study-active.png",
+    imageAlt: "학습 화면: 단어, 뜻, 펼쳐진 힌트가 함께 보인다",
     body: (
       <>
         선택한 파일의 단어를 처음부터 끝까지 한 번 훑어보는 모드입니다. 화면을 넘기면서 뜻을
@@ -18,6 +22,8 @@ const PART_ITEMS: GuideItem[] = [
   },
   {
     title: "연습 — 망각 곡선 큐",
+    image: "/images/guide/05-practice-active.png",
+    imageAlt: "연습 화면: 완벽함/조금앎/헷갈림/모름 4단계 채점 버튼",
     body: (
       <>
         단어를 보고 스스로 <b>완벽함(100) · 조금 앎(60) · 헷갈림(40) · 모름(0)</b> 4단계로
@@ -31,6 +37,8 @@ const PART_ITEMS: GuideItem[] = [
   },
   {
     title: "시험 — 출제 개수를 정해 채점",
+    image: "/images/guide/07-exam-setup.png",
+    imageAlt: "시험 설정 화면: 출제 개수 지정과 최대/+5/-5 버튼",
     body: (
       <>
         출제할 단어 개수를 정하고 O/X로 채점합니다. 틀린 단어는 자동으로 <b>오답 노트</b>에
@@ -40,6 +48,8 @@ const PART_ITEMS: GuideItem[] = [
   },
   {
     title: "단어장 추가 — GitHub 저장소에 직접 커밋",
+    image: "/images/guide/09-wordbook.png",
+    imageAlt: "단어장 추가 화면: 대분류/하위 폴더 선택과 내용 입력",
     body: (
       <>
         새 단어장을 앱 안에서 바로 만들 수 있습니다. 직접 입력하거나 txt 파일을 올리면,
@@ -65,6 +75,8 @@ const PART_ITEMS: GuideItem[] = [
 const FEATURE_ITEMS: GuideItem[] = [
   {
     title: "이전 학습 이어하기 — [이 학습 다시 하기]",
+    image: "/images/guide/06-dashboard.png",
+    imageAlt: "학습 대시보드: 진행률, 최근 학습 기록 드롭다운, 이 학습 다시 하기 버튼",
     body: (
       <>
         학습·연습 화면 하단의 요약 카드에는 완료/남은 단어 개수까지 포함한 진행률과, 예전에
@@ -77,6 +89,8 @@ const FEATURE_ITEMS: GuideItem[] = [
   },
   {
     title: "학습 기록 지우기",
+    image: "/images/guide/11-settings-delete.png",
+    imageAlt: "설정 화면: 학습 기록 목록과 개별 삭제 버튼",
     body: (
       <>
         설정 화면의 <b>&ldquo;학습 기록 관리&rdquo;</b>에서 저장된 학습/연습/시험/지문 기록을
@@ -135,12 +149,21 @@ function GuideAccordion({ items }: { items: GuideItem[] }) {
             className="cursor-pointer list-none px-4 py-2.5 text-sm font-bold select-none [&::-webkit-details-marker]:hidden"
             style={{ background: "var(--hint-bg)", color: "var(--text)" }}
           >
-            <span className="mr-1.5 inline-block" style={{ color: "var(--text-muted)" }}>
+            <span className="details-chevron mr-1.5 inline-block" style={{ color: "var(--text-muted)" }}>
               ▸
             </span>
             {item.title}
           </summary>
           <div className="px-4 py-3 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+            {item.image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={item.image}
+                alt={item.imageAlt ?? ""}
+                className="mb-3 w-full rounded-xl border"
+                style={{ borderColor: "var(--card-border)" }}
+              />
+            )}
             {item.body}
           </div>
         </details>
@@ -151,21 +174,22 @@ function GuideAccordion({ items }: { items: GuideItem[] }) {
 
 export default function UsageGuide() {
   return (
-    <div className="mt-5 study-card p-4">
-      <div className="text-sm font-bold">사용법</div>
-      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-        처음 사용한다면 아래에서 파트별 기능과 편의 기능을 먼저 확인해보세요.
-      </p>
-
-      <div className="mt-3 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-        파트별 기능
+    <>
+      <div className="mt-4 study-card p-4">
+        <div className="text-sm font-bold">파트별 기능</div>
+        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+          각 항목을 눌러 화면과 함께 설명을 확인할 수 있습니다.
+        </p>
+        <GuideAccordion items={PART_ITEMS} />
       </div>
-      <GuideAccordion items={PART_ITEMS} />
 
-      <div className="mt-4 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-        편의 기능
+      <div className="mt-4 study-card p-4">
+        <div className="text-sm font-bold">편의 기능</div>
+        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+          학습을 더 편하게 만들어주는 기능들입니다.
+        </p>
+        <GuideAccordion items={FEATURE_ITEMS} />
       </div>
-      <GuideAccordion items={FEATURE_ITEMS} />
-    </div>
+    </>
   );
 }
