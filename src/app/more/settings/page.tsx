@@ -5,6 +5,7 @@ import { useUserId } from "@/hooks/useUserId";
 import { useTheme } from "@/contexts/ThemeContext";
 import { isSyncEnabled } from "@/lib/progress";
 import { deleteLearningLog, formatKstDateTime, listAllLearningLogs, LearningLogEntryWithPart, Part } from "@/lib/learningLog";
+import UsageGuide from "@/components/UsageGuide";
 
 const PART_LABEL: Record<Part, string> = {
   study: "학습",
@@ -54,6 +55,8 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
       <h1 className="text-xl font-extrabold">설정</h1>
+
+      <UsageGuide />
 
       <div className="mt-5 study-card p-4">
         <div className="text-sm font-bold">화면 테마</div>

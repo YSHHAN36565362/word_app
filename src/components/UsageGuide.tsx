@@ -1,0 +1,171 @@
+"use client";
+
+interface GuideItem {
+  title: string;
+  body: React.ReactNode;
+}
+
+const PART_ITEMS: GuideItem[] = [
+  {
+    title: "학습 — 순서대로 훑어보기",
+    body: (
+      <>
+        선택한 파일의 단어를 처음부터 끝까지 한 번 훑어보는 모드입니다. 화면을 넘기면서 뜻을
+        외우고, 필요하면 힌트를 펼쳐서 상세 설명(어원·예문 등)을 확인합니다. 단축키:{" "}
+        <b>←/→</b>로 이전/다음 단어, <b>H</b>로 힌트 보기.
+      </>
+    ),
+  },
+  {
+    title: "연습 — 망각 곡선 큐",
+    body: (
+      <>
+        단어를 보고 스스로 <b>완벽함(100) · 조금 앎(60) · 헷갈림(40) · 모름(0)</b> 4단계로
+        채점합니다. 점수가 낮을수록 큐(대기열)의 더 앞쪽 구간에 다시 꽂혀서 금방 다시
+        만나고, 완벽함은 이번 세션에서 아예 빠집니다. 위치는 매번 구간 안에서 무작위로
+        정해져서, 단어가 아니라 &ldquo;순서&rdquo;를 외워버리는 것을 막습니다. 채점 결과(단어별
+        숙련도)는 서버에 저장되어, 다음에 같은 번호로 연습을 다시 시작해도 예전에 약했던
+        단어가 먼저 나옵니다 — 세션이 끝나도 기억됩니다.
+      </>
+    ),
+  },
+  {
+    title: "시험 — 출제 개수를 정해 채점",
+    body: (
+      <>
+        출제할 단어 개수를 정하고 O/X로 채점합니다. 틀린 단어는 자동으로 <b>오답 노트</b>에
+        쌓이고, 시험이 끝나면 틀린 단어만 바로 다시 풀어볼 수 있습니다.
+      </>
+    ),
+  },
+  {
+    title: "단어장 추가 — GitHub 저장소에 직접 커밋",
+    body: (
+      <>
+        새 단어장을 앱 안에서 바로 만들 수 있습니다. 직접 입력하거나 txt 파일을 올리면,
+        비밀번호 확인 후 GitHub 저장소에 파일로 커밋됩니다. 별도 서버 DB 없이 저장소 자체가
+        데이터베이스 역할을 합니다.
+      </>
+    ),
+  },
+  {
+    title: "지문 암기",
+    body: <>회화문이나 독해 지문을 한 문장씩 넘기면서 암송하는 모드입니다.</>,
+  },
+  {
+    title: "오답 노트",
+    body: <>시험에서 틀렸던 단어들을 모아서 확인하고, 그 단어들로만 바로 연습을 시작할 수 있습니다.</>,
+  },
+  {
+    title: "통계",
+    body: <>날짜별로 얼마나 연습·시험을 봤는지, 정답률은 어땠는지 확인할 수 있습니다.</>,
+  },
+];
+
+const FEATURE_ITEMS: GuideItem[] = [
+  {
+    title: "이전 학습 이어하기 — [이 학습 다시 하기]",
+    body: (
+      <>
+        학습·연습 화면 하단의 요약 카드에는 완료/남은 단어 개수까지 포함한 진행률과, 예전에
+        공부했던 파일 조합들을 고를 수 있는 드롭다운이 있습니다. 드롭다운에서 과거 기록(또는
+        현재 선택한 파일 조합)을 고른 뒤 <b>[이 학습 다시 하기]</b>를 누르면, 그때 썼던 파일
+        선택과 모드(이름만/뜻만/랜덤)가 그대로 복원되면서 <b>자동으로 단어 화면까지 진입</b>
+        합니다.
+      </>
+    ),
+  },
+  {
+    title: "학습 기록 지우기",
+    body: (
+      <>
+        설정 화면의 <b>&ldquo;학습 기록 관리&rdquo;</b>에서 저장된 학습/연습/시험/지문 기록을
+        확인하고, 필요 없는 항목을 개별로 삭제할 수 있습니다. 파일을 잘못 선택했거나 특정
+        조합의 진도를 처음부터 다시 재고 싶을 때 사용합니다.
+      </>
+    ),
+  },
+  {
+    title: "단어 순서 섞기",
+    body: (
+      <>
+        학습·연습·시험 화면에서 <b>종료하기</b> 옆의 <b>[단어 순서 섞기]</b> 버튼을 누르면, 아직
+        보지 않은 단어들의 순서를 다시 무작위로 섞습니다. 같은 조합을 여러 번 반복해서 보다
+        보면 내용이 아니라 &ldquo;다음에 뭐가 나올지&rdquo; 순서로 외워버릴 수 있어서, 언제든
+        원할 때 순서를 바꿀 수 있게 했습니다.
+      </>
+    ),
+  },
+  {
+    title: "내 번호 — 기기 간 동기화",
+    body: (
+      <>
+        로그인 없이, 원하는 숫자를 하나 입력하면 그 번호로 학습/연습/시험/지문 진행 상황,
+        오답 노트, 통계가 저장됩니다. 다른 기기(휴대폰 · PC 등)에서 같은 번호를 입력하면
+        이어서 사용할 수 있습니다. 번호를 입력하지 않아도 학습 자체는 문제없이 동작하며,
+        이 경우 진행 상황만 저장되지 않습니다.
+      </>
+    ),
+  },
+  {
+    title: "키보드 단축키",
+    body: (
+      <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <span className="font-bold">학습</span>
+        <span>← / → 이전·다음, H 힌트</span>
+        <span className="font-bold">연습</span>
+        <span>Space/Enter 정답 확인, 1~4 또는 ←↓↑→ 모름·헷갈림·조금앎·완벽함</span>
+        <span className="font-bold">시험</span>
+        <span>Space/Enter 정답 확인, ← 틀림, → 맞음</span>
+      </div>
+    ),
+  },
+];
+
+function GuideAccordion({ items }: { items: GuideItem[] }) {
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      {items.map((item) => (
+        <details
+          key={item.title}
+          className="rounded-2xl border overflow-hidden"
+          style={{ borderColor: "var(--card-border)" }}
+        >
+          <summary
+            className="cursor-pointer list-none px-4 py-2.5 text-sm font-bold select-none [&::-webkit-details-marker]:hidden"
+            style={{ background: "var(--hint-bg)", color: "var(--text)" }}
+          >
+            <span className="mr-1.5 inline-block" style={{ color: "var(--text-muted)" }}>
+              ▸
+            </span>
+            {item.title}
+          </summary>
+          <div className="px-4 py-3 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+            {item.body}
+          </div>
+        </details>
+      ))}
+    </div>
+  );
+}
+
+export default function UsageGuide() {
+  return (
+    <div className="mt-5 study-card p-4">
+      <div className="text-sm font-bold">사용법</div>
+      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+        처음 사용한다면 아래에서 파트별 기능과 편의 기능을 먼저 확인해보세요.
+      </p>
+
+      <div className="mt-3 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+        파트별 기능
+      </div>
+      <GuideAccordion items={PART_ITEMS} />
+
+      <div className="mt-4 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+        편의 기능
+      </div>
+      <GuideAccordion items={FEATURE_ITEMS} />
+    </div>
+  );
+}

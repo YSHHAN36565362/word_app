@@ -1,26 +1,309 @@
 # 단어장 (word_app)
 
-기존 Streamlit(`word_test/app.py`) 단어 암기 프로그램을 Next.js + Tailwind + Framer Motion 기반의
-모바일 웹앱(PWA)으로 새로 만든 프론트엔드입니다. 단어장 데이터(`word_list/*.txt`)는 그대로
-[`word_test`](https://github.com/YSHHAN36565362/word_test) 저장소를 읽어옵니다. 학습/연습/시험
-진행 상황, 오답노트, 통계는 Supabase에 저장되어 여러 기기에서 같은 "내 번호"로 이어서 볼 수 있습니다.
+바로 사용해보기: [https://wordapp-puce.vercel.app](https://wordapp-puce.vercel.app)
 
-## 아키텍처
+![Next.js](https://img.shields.io/badge/Next.js-000000?logo=next.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?logo=tailwindcss&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
+![GitHub API](https://img.shields.io/badge/GitHub%20Contents%20API-181717?logo=github&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-000000?logo=vercel&logoColor=white)
+![License](https://img.shields.io/badge/personal%20project-informational)
 
-- **단어장 읽기**: 브라우저가 GitHub API를 직접 호출하지 않습니다. 토큰이 브라우저에 노출되면 안 되므로,
-  Next.js 서버(Route Handler, `src/app/api/wordlist/*`, `src/app/api/wordbook`)가
-  GitHub Contents API를 대신 호출하고 5분(`revalidate = 300`) 동안 결과를 캐시합니다.
-- **단어장 쓰기**(단어장 추가): 같은 서버 라우트가 `GITHUB_TOKEN`으로 커밋합니다.
-  비밀번호는 서버에서 `UPLOAD_PASSWORD`와 상수시간 비교로 검증합니다.
-- **진행 상황 동기화**: `src/lib/supabase.ts` + `src/lib/progress.ts`가 Supabase 테이블
-  (`progress`, `wrong_notes`, `study_stats`)에 직접 읽고 씁니다. "내 번호"를 식별자로 쓰는
-  무-인증 방식으로, 기존 Streamlit 앱과 동일한 신뢰 모델입니다(같은 수업을 듣는 소규모 그룹 전제).
-  `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY`가 없으면 `src/app/api/config`가 `STORAGE_` 접두사가
-  붙은 Vercel Integration 변수명(`STORAGE_SUPABASE_URL` 등)까지 서버에서 대신 읽어 내려줍니다 —
-  `NEXT_PUBLIC_` 접두사가 아닌 변수는 브라우저 번들에 애초에 포함되지 않으므로, 클라이언트
-  코드만으로는 다른 이름의 변수를 읽을 방법이 없기 때문입니다.
+![홈 화면](./images/01-home.png)
 
-## 로컬 실행
+---
+
+## 개요
+
+K-Move 일본 IT 연수 동기들이 한자 암기에 어려움을 겪는 것을 보고 만든 학습 도구입니다.
+**GitHub 저장소를 단어장 데이터베이스로 그대로 사용**하고, 진행 상황·오답 노트·통계는
+**Supabase**에 저장해 여러 기기에서 같은 "내 번호"로 이어서 쓸 수 있습니다.
+
+원래는 [`word_test`](https://github.com/YSHHAN36565362/word_test) 라는 이름의 Streamlit
+앱으로 시작했습니다. 기능은 그대로 두고, 실제 휴대폰에서 매일 쓰기 편한 앱처럼 느껴지도록
+Next.js + PWA로 프론트엔드를 다시 만든 것이 이 저장소(`word_app`)입니다.
+
+## 만들게 된 계기
+
+K-Move 일본 IT 연수 과정에서 많은 연수생이 한자 암기에 어려움을 겪고 있었습니다. 방과 후
+함께 복습을 하던 중 한 연수생이 "같은 한자를 몇 번을 외워도 다음 날이면 잊어버린다"고
+말한 것이 시작이었습니다.
+
+처음에는 단순한 단어 리스트를 만들어 공유했습니다. 그런데 금방 한계가 보였습니다.
+성립(어원)과 예문이 없으면 결국 기억에 남지 않는다는 것, 그리고 한 번 외운 단어를 언제
+다시 봐야 하는지를 아무도 관리하지 못한다는 것이었습니다. 그래서 두 가지를 직접
+만들었습니다.
+
+1. LLM으로 한자의 성립·예문·암기 치트키를 생성해 단어장을 자동으로 채우는 흐름
+2. 자기 평가에 따라 다시 등장하는 시점이 달라지는 망각 곡선 큐
+
+Streamlit 버전(`word_test`)으로 두 달 넘게 매일 써보니, 기능보다 "휴대폰에서 얼마나
+자연스럽게 쓰이는가"가 더 큰 문제였습니다. Streamlit은 새로고침 없이 카드가 뒤집히는
+느낌, 하단 탭 내비게이션, 홈 화면 아이콘 같은 네이티브 앱 감각을 구조적으로 내기 어려웠고,
+세션이 자주 끊겨 진행 상황을 잃는 문제도 있었습니다. 그래서 데이터 구조와 학습 로직은
+그대로 옮기고, 프론트엔드만 Next.js 기반 PWA로 다시 만들었습니다. 그 결과물이 이
+저장소입니다.
+
+| 항목 | 내용 |
+|---|---|
+| 개발 시기 | 2026년 (K-Move 일본 Java 전문가 육성과정 수강 중) |
+| 유형 | 개인 프로젝트 (실사용 목적) |
+| 프레임워크 | Next.js (App Router) + TypeScript |
+| 실행 형태 | 모바일 웹앱 (PWA, 홈 화면 설치 지원) |
+| 단어장 데이터 저장소 | GitHub 저장소 (Contents API), [`word_test`](https://github.com/YSHHAN36565362/word_test) |
+| 진행 상황 저장소 | Supabase (Postgres) |
+| 이전 버전 | [`word_test`](https://github.com/YSHHAN36565362/word_test) — Streamlit 버전, 같은 데이터/로직을 공유 |
+
+---
+
+## 파트별 기능
+
+하단 탭 내비게이션으로 파트를 전환합니다. 모든 파트는 화면 상단에서 고른 파일 조합을
+그대로 사용합니다.
+
+| # | 파트 | 설명 |
+|---|---|---|
+| 1 | 학습 | 단어를 순서대로 넘기며 훑어보는 1회독 모드. `←/→`로 이전/다음, `H`로 힌트 |
+| 2 | 연습 | 망각 곡선 큐 적용. 자기 평가(100/60/40/0)에 따라 재등장 시점이 달라지고, 단어별 숙련도가 서버에 영구 저장됨 |
+| 3 | 시험 | 출제 개수를 지정해 O/X로 채점. 틀린 단어는 오답 노트에 자동 저장 |
+| 4 | 단어장 추가 | 웹에서 직접 입력하거나 txt를 올려 GitHub 저장소에 커밋 |
+| 5 | 지문 암기 | 회화문·독해 지문을 한 문장씩 넘기며 암송 |
+| 6 | 오답 노트 | 시험에서 틀린 단어를 모아보고, 그 단어들로 바로 연습을 시작 |
+| 7 | 통계 | 날짜별 연습·시험 횟수와 정답률 확인 |
+
+### 학습 파트
+
+![학습 파트 — 파일 선택](./images/02-study-select.png)
+
+대분류(Japanese / \_IT) → 세부 카테고리(N2, N3 …) → 월별 아코디언 → 파일 다중 선택
+순으로 좁혀 들어갑니다. 여러 파일을 동시에 골라 하나의 목록으로 합칠 수 있습니다.
+
+![학습 진행 화면](./images/03-study-active.png)
+
+정답과 함께 한자를 부수 단위로 분해한 힌트와 LLM이 생성한 암기 치트키가 표시됩니다.
+"단어 순서 섞기" 버튼으로, 같은 조합을 여러 번 반복해서 볼 때 내용이 아니라 순서를
+외워버리는 것을 막을 수 있습니다.
+
+### 연습 파트
+
+![연습 진행 화면](./images/05-practice-active.png)
+
+정답 확인 후 완벽함(100) · 조금 앎(60) · 헷갈림(40) · 모름(0) 4단계로 스스로 채점합니다.
+하단에는 진행률과 남은 큐 개수가 실시간으로 갱신됩니다.
+
+### 시험 파트
+
+![시험 파트 — 설정](./images/07-exam-setup.png)
+
+선택한 파일들의 전체 단어 수를 상한으로 출제 개수를 지정합니다. `최대` / `+5` / `-5`
+버튼으로 빠르게 조절할 수 있습니다.
+
+![시험 진행 화면](./images/08-exam-active.png)
+
+### 단어장 관리 (GitHub 연동)
+
+![단어장 관리](./images/09-wordbook.png)
+
+앱 안에서 바로 단어장을 만들어 GitHub 저장소에 커밋합니다. 직접 입력 방식과 txt 업로드
+방식을 모두 지원하며, 파일 제목에는 오늘 날짜가 자동으로 붙습니다.
+
+---
+
+## 핵심 — 망각 곡선 큐와 영구 숙련도
+
+가장 공을 들인 부분입니다. 흔한 단어장 앱은 「맞음 / 틀림」 2지선다지만, 실제 암기는
+그렇게 이분법적이지 않습니다. "보면 알겠는데 바로는 안 나온다" 같은 중간 상태가
+존재합니다. 그래서 자기 평가를 4단계로 나누고, 각 단계마다 큐의 어느 위치에 다시
+꽂아 넣을지를 다르게 설계했습니다.
+
+| 평가 | 점수 | 재삽입 위치 | 의미 |
+|---|---:|---|---|
+| 완벽함 | 100 | 큐에서 제거 | 이번 세션에서 다시 안 나옴 |
+| 조금 앎 | 60 | 남은 큐의 50–80% 지점 | 한참 뒤에 다시 |
+| 헷갈림 | 40 | 남은 큐의 20–40% 지점 | 중간쯤에 다시 |
+| 모름 | 0 | 남은 큐의 5–15% 지점 | 곧바로 다시 |
+
+```ts
+const REQUEUE_RANGES: Record<number, [number, number]> = {
+  60: [0.5, 0.8],
+  40: [0.2, 0.4],
+  0: [0.05, 0.15],
+};
+
+export function requeuePosition(queueLen: number, level: 60 | 40 | 0): number {
+  if (queueLen <= 1) return 0;
+  const [lo, hi] = REQUEUE_RANGES[level];
+  const loIdx = Math.max(0, Math.floor(queueLen * lo));
+  const hiIdx = Math.max(loIdx, Math.floor(queueLen * hi));
+  return loIdx + Math.floor(Math.random() * (hiIdx - loIdx + 1));
+}
+```
+
+두 가지 설계 의도가 있습니다.
+
+- 고정값이 아니라 구간에서 무작위로 뽑습니다. 위치를 고정하면 사용자가 순서를
+  외워버려서, 단어가 아니라 "순서"를 기억하게 됩니다.
+- 절대 개수가 아니라 큐 길이의 비율로 계산합니다. 남은 단어가 10개일 때와 300개일
+  때 "5~15% 뒤"의 체감이 자연스럽게 달라집니다.
+
+Streamlit 버전에서는 이 큐가 **세션 안에서만** 동작해서, 브라우저를 닫으면 그동안의
+채점 결과가 사라졌습니다. word_app에서는 채점할 때마다 단어별 최신 점수를 Supabase
+`word_mastery` 테이블에 저장하고, 다음에 연습·시험을 다시 시작할 때 이 점수가 낮은
+단어일수록 큐/출제 앞쪽에 오도록 정렬합니다. 세션이 끝나고 하루가 지나도, 지난번에
+약했던 단어가 먼저 나옵니다.
+
+## 학습 대시보드와 이어하기
+
+![학습 대시보드](./images/06-dashboard.png)
+
+학습·연습 화면 하단에는 요약 카드가 있습니다.
+
+- 완료/남은 단어 개수를 포함한 진행률(`42% (99 / 236개 완료, 137개 남음)`)
+- 예전에 공부했던 파일 조합들을 최근 순으로 볼 수 있는 드롭다운
+- 드롭다운에서 조합을 고르고 **[이 학습 다시 하기]**를 누르면, 그때 썼던 파일 선택과
+  모드(이름만/뜻만/랜덤)가 그대로 복원되면서 자동으로 단어 화면까지 진입
+
+파일 조합별 진행 기록은 (사용자 번호, 파트, 파일 조합) 단위로 별도 저장되어, 세션이
+끝난 뒤에도 마지막 진행률과 학습 시각이 남습니다.
+
+---
+
+## GitHub을 단어장 데이터베이스로
+
+개인 학습 도구에 DB 서버를 따로 띄우는 것은 과합니다. 그래서 **GitHub Contents API**를
+단어장 데이터 계층으로 그대로 사용했습니다. 다만 토큰이 브라우저에 노출되면 안 되므로,
+브라우저는 GitHub API를 직접 호출하지 않고 Next.js 서버(Route Handler)가 대신
+호출합니다.
+
+| 기능 | 구현 |
+|---|---|
+| 단어장 목록 조회 | `GET /contents/{path}` — 폴더 구조를 그대로 카테고리로 사용, 5분 캐시 |
+| 단어장 읽기 | `GET` + base64 디코드, 5분 캐시 |
+| 단어장 추가·수정 | `PUT /contents/{path}` — 기존 파일은 SHA를 먼저 조회해 덮어쓰기 |
+| 업로드 비밀번호 검증 | 서버에서 상수시간 비교로 확인 |
+
+이 방식의 장점은 명확합니다. 버전 관리가 공짜로 따라오고(단어장을 잘못 고쳐도 커밋
+히스토리로 되돌릴 수 있음), 인프라 비용이 0원이며, 저장소를 Fork 하면 동료들도 각자의
+단어장을 가질 수 있습니다.
+
+## Supabase로 진행 상황 동기화 — "내 번호"
+
+로그인 기능을 붙이면 무거워집니다. 대신 사용자가 원하는 숫자를 하나 입력하면 그것을
+식별자로 삼아 진행 상황을 저장하는 방식을 그대로 이어받았습니다. 번호를 입력하지
+않아도 학습 자체는 문제없이 동작하고, 이 경우 진행 상황만 저장되지 않습니다.
+
+Streamlit 버전은 진행 상황도 GitHub 커밋으로 저장했지만, word_app에서는 이 부분을
+**Supabase**로 옮겼습니다. 학습 한 단어 넘길 때마다 GitHub에 커밋하면 커밋 히스토리가
+지저분해지고 느리기 때문입니다. Supabase는 (사용자 번호) 단위로 접근하는 무-인증
+방식으로, 기존 앱과 동일한 신뢰 모델입니다(같은 수업을 듣는 소규모 그룹 안에서 쓰는
+것을 전제).
+
+| 테이블 | 용도 |
+|---|---|
+| `progress` | 진행 중인 세션 1개 (파트별로 최신 상태만 유지) |
+| `word_mastery` | 단어별 최신 채점 점수 (연습/시험 공통, 영구 보관) |
+| `learning_log` | 파일 조합별 진행 기록 — 완료 후에도 남아서 대시보드/이어하기에 사용 |
+| `wrong_notes` | 오답 노트 |
+| `study_stats` | 날짜별 학습 통계 |
+
+---
+
+## 단어장 파일 포맷
+
+사람이 손으로 쓰기 쉬운 것을 최우선으로 했습니다. 두 가지 형식을 모두 허용하며,
+파서가 자동으로 판별합니다.
+
+형식 A — 콜론 구분
+
+```
+組み立てる : 조립하다(くみたてる)
+- 組 (조/짤 조) = 糸(실)+且(쌓다) : 실을 쌓아 짜냄
+- 立てる (たてる,세우다) : 세워서 만듦
+종합설명: 부품들을 짜맞춰(組) 세워(立てる) 완성하는 것.
+암기 치트키
+1. "쿠미타테루=쿠(구) 미(니어카) 타(다) 조립한다"
+2. 레고 블록을 짜맞춰 세우는 이미지
+```
+
+형식 B — 줄 구분
+
+```
+組み立てる
+조립하다(くみたてる)
+(3번째 줄부터 힌트)
+```
+
+빈 줄이 블록 구분자입니다. 첫 줄에 `:`가 있으면 A형식, 없으면 B형식으로 처리하고,
+3번째 줄부터는 전부 힌트로 묶습니다. 전각 콜론(`：`)도 반각으로 정규화하고,
+(단어, 뜻, 힌트) 3요소가 모두 같은 항목은 자동으로 중복 제거합니다.
+
+힌트 부분은 LLM에게 생성시킨 뒤 그대로 붙여 넣는 것을 전제로 설계했습니다.
+
+---
+
+## 처음 쓰는 사람을 위한 사용법 안내
+
+![설정 — 사용법](./images/10-usage-guide.png)
+
+설정 화면 맨 위에서 파트별 기능과 편의 기능(이 학습 다시 하기, 단어 순서 섞기, 학습
+기록 관리, 내 번호, 키보드 단축키)을 아코디언으로 펼쳐 볼 수 있습니다. 처음 방문한
+사람도 앱을 둘러보기 전에 무엇을 할 수 있는지 먼저 확인할 수 있게 했습니다.
+
+## 학습 기록 관리
+
+![설정 — 학습 기록 삭제](./images/11-settings-delete.png)
+
+설정 화면에서 저장된 학습/연습/시험/지문 기록을 목록으로 확인하고, 필요 없는 항목을
+개별로 삭제할 수 있습니다. 파일을 잘못 선택했거나 특정 조합의 진도를 처음부터 다시
+재고 싶을 때 사용합니다.
+
+---
+
+## 사용성을 위해 넣은 것들
+
+실제로 매일 쓰는 도구이다 보니, 학습 흐름이 끊기는 지점을 하나씩 없애는 데 시간을
+많이 썼습니다.
+
+| 기능 | 이유 |
+|---|---|
+| 키보드 단축키 (`←/→`, `H`, `Space`, `1`~`4`) | 마우스로 버튼을 찾는 시간이 암기 리듬을 끊습니다 |
+| 단어 순서 섞기 | 같은 조합을 반복해서 보면 내용이 아니라 순서를 외워버릴 수 있습니다 |
+| 학습 대시보드 + 이 학습 다시 하기 | 예전 파일 조합/모드를 다시 찾아 체크하는 수고를 없앱니다 |
+| PWA 설치 + 하단 탭 내비게이션 | 홈 화면에 추가하면 주소창 없이 앱처럼 실행됩니다 |
+| 3D 플립 카드 + 마스코트 반응 | 채점할 때마다 화면이 다시 그려지지 않고 카드가 뒤집히며 반응합니다 |
+| 집중 모드 (Focus mode) | 학습이 시작되면 하단 내비게이션을 접어 화면을 비웁니다 |
+| 다크 모드 / 라이트 모드 | 밤에 스마트폰 화면 밝기 부담을 줄입니다 |
+| JLPT D-day 카운트다운 | 홈 화면에서 시험일까지 남은 날짜를 바로 확인합니다 |
+
+---
+
+## 폴더 구조
+
+```
+src/
+  app/
+    study/ practice/ exam/ wrongnotes/ stats/ script/ wordbook/  # 각 파트 페이지
+    more/                        # 더보기 메뉴, 설정(내 번호 · 테마 · 사용법 · 학습 기록 관리)
+    api/
+      config/                    # 브라우저에 Supabase URL/anon key를 내려줌
+      wordlist/tree/             # word_list 폴더 트리 (카테고리 > 세부카테고리 > 파일)
+      wordlist/words/            # 선택한 파일들의 단어 풀 파싱 (POST)
+      wordlist/script/           # 지문 외우기용 줄 단위 파싱
+      wordbook/                  # 단어장 추가 (GitHub 커밋, 비밀번호 검증)
+  components/                    # FileSelector, FlashCard(3D 플립), Mascot, SessionInfoPanel, UsageGuide 등
+  contexts/                      # ThemeContext(다크모드), FocusModeContext(집중 모드)
+  lib/                           # parser, queue(망각곡선), mastery(숙련도), learningLog(대시보드), github(서버 전용), supabase
+  hooks/useUserId.ts             # localStorage + URL 쿼리(?uid=) 기반 "내 번호"
+supabase/schema.sql              # progress / word_mastery / learning_log / wrong_notes / study_stats 테이블 + RLS
+scripts/generate-icons.mjs       # PWA 아이콘(PNG) 생성 스크립트
+public/images/                   # 하단 네비 아이콘 + 연습/학습 피드백 캐릭터 이미지
+images/                          # README용 스크린샷
+```
+
+---
+
+## 실행 방법
 
 ```bash
 npm install
@@ -28,12 +311,13 @@ cp .env.example .env.local   # 아래 "환경변수" 참고해서 값 채우기
 npm run dev
 ```
 
-`GITHUB_TOKEN` 없이도(공개 저장소이므로) 단어장 읽기는 되지만, 시간당 요청 한도가 60회로 낮아
-접속자가 많으면 금방 소진됩니다. 토큰을 넣는 것을 권장합니다.
+`GITHUB_TOKEN` 없이도(공개 저장소이므로) 단어장 읽기는 되지만, 시간당 요청 한도가
+60회로 낮아 접속자가 많으면 금방 소진됩니다. 토큰을 넣는 것을 권장합니다.
 
-## 환경변수
+### 환경변수
 
-`.env.example` 참고. 배포 시 Vercel 프로젝트 설정의 Environment Variables에 아래를 등록하세요.
+`.env.example` 참고. 배포 시 Vercel 프로젝트 설정의 Environment Variables에 아래를
+등록하세요.
 
 | 변수 | 용도 | 필수 |
 |---|---|---|
@@ -42,62 +326,81 @@ npm run dev
 | `UPLOAD_PASSWORD` | 단어장 추가 시 확인하는 비밀번호 | 쓰기 기능에 필수 |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 진행 상황/오답노트/통계 동기화 | 동기화 기능에 필수 (Vercel Supabase Integration이 `STORAGE_` 접두사로 저장했다면 그대로 둬도 `/api/config`가 대신 읽음) |
 
-Supabase 없이 배포해도 앱은 정상 동작하며, 이 경우 "내 번호"를 입력해도 진행 상황이 저장되지
-않는다는 안내만 뜹니다.
+Supabase 없이 배포해도 앱은 정상 동작하며, 이 경우 "내 번호"를 입력해도 진행 상황이
+저장되지 않는다는 안내만 뜹니다.
 
-## Supabase 설정 (기기 간 진행 상황 동기화)
+### Supabase 설정 (기기 간 진행 상황 동기화)
 
 1. [supabase.com](https://supabase.com)에서 새 프로젝트 생성 (무료 플랜으로 충분).
 2. 프로젝트의 SQL Editor에서 `supabase/schema.sql` 파일 전체를 붙여넣고 실행.
 3. Project Settings → API에서 `Project URL`과 `anon public` 키를 복사해
    `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`로 설정.
 
-> 이 스키마는 실제 로그인 없이 "내 번호" 문자열만으로 접근하는 방식이라 엄밀한 보안은 아닙니다
-> (기존 Streamlit 앱의 "내 번호" 저장 방식과 동일한 수준). 같은 수업을 듣는 30명 미만의 신뢰
-> 그룹 안에서 쓰는 것을 전제로 합니다.
+이 스키마는 실제 로그인 없이 "내 번호" 문자열만으로 접근하는 방식이라 엄밀한 보안은
+아닙니다(기존 Streamlit 앱의 "내 번호" 저장 방식과 동일한 수준). 같은 수업을 듣는
+30명 미만의 신뢰 그룹 안에서 쓰는 것을 전제로 합니다.
 
-## GitHub 토큰 발급 (단어장 추가용)
+### GitHub 토큰 발급 (단어장 추가용)
 
 1. GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token.
 2. Repository access를 `word_test` 저장소로 제한.
-3. Permissions → Contents: **Read and write**.
+3. Permissions → Contents: Read and write.
 4. 발급된 토큰을 `GITHUB_TOKEN`에 설정.
 
-## Vercel 배포
+### Vercel 배포
 
 1. 이 폴더(`word_app`)를 새 GitHub 저장소로 push.
-2. [vercel.com](https://vercel.com) → New Project → 방금 만든 저장소 선택 (Next.js 자동 인식).
+2. [vercel.com](https://vercel.com) → New Project → 방금 만든 저장소 선택 (Next.js
+   자동 인식).
 3. Environment Variables에 위 표의 값들을 입력 후 Deploy.
 4. 배포된 주소로 접속 → 모바일 브라우저에서 "홈 화면에 추가"를 하면 PWA로 설치되어
-   주소창 없이 전체화면 앱처럼 실행됩니다 (`public/manifest.json` 참고).
+   주소창 없이 전체화면 앱처럼 실행됩니다.
 
-## 폴더 구조
+---
 
-```
-src/
-  app/
-    study/ practice/ exam/ wrongnotes/ stats/ script/ wordbook/  # 각 파트 페이지
-    more/                        # 더보기 메뉴, 설정(내 번호 · 테마)
-    api/
-      config/                    # 브라우저에 Supabase URL/anon key를 내려줌 (STORAGE_ 접두사 fallback 포함)
-      wordlist/tree/             # word_list 폴더 트리 (카테고리 > 세부카테고리 > 파일)
-      wordlist/words/            # 선택한 파일들의 단어 풀 파싱 (POST)
-      wordlist/script/           # 지문 외우기용 줄 단위 파싱
-      wordbook/                  # 단어장 추가 (GitHub 커밋, 비밀번호 검증)
-  components/                    # FileSelector, FlashCard(3D 플립), Mascot(피드백 캐릭터), ProgressBar 등
-  contexts/                      # ThemeContext(다크모드), FocusModeContext(학습 중 하단 네비 숨김)
-  lib/                           # parser, queue(망각곡선), github(서버 전용), supabase, progress
-  hooks/useUserId.ts             # localStorage + URL 쿼리(?uid=) 기반 "내 번호"
-supabase/schema.sql              # progress / wrong_notes / study_stats 테이블 + RLS
-scripts/generate-icons.mjs       # PWA 아이콘(PNG) 생성 스크립트 (외부 라이브러리 없이 zlib만 사용)
-public/images/                   # 하단 네비 아이콘 + 연습/학습 피드백 캐릭터 이미지 (images/에서 복사)
-```
-
-## 기존 Streamlit 앱과의 차이
+## 기존 Streamlit(word_test) 앱과의 차이
 
 - 새로고침 없이 카드가 3D로 뒤집히고(Framer Motion), 채점 시 마스코트가 반응합니다.
 - 하단 탭 내비게이션 + PWA로 실제 모바일 앱처럼 홈 화면에 설치할 수 있습니다.
 - 진행 상황 저장이 GitHub 커밋이 아닌 Supabase로 바뀌어 훨씬 빠르고, 커밋 히스토리가
   더러워지지 않습니다.
-- "떠다니는 메모장", "세션 킵얼라이브" 등 Streamlit iframe 특유의 우회 기능은 필요 없어져
-  포팅하지 않았습니다.
+- 단어별 채점 점수(숙련도)가 세션을 넘어 영구 저장되어, 다음 연습·시험에서도 약했던
+  단어가 먼저 나옵니다 — Streamlit 버전에서는 세션 안에서만 동작하던 부분입니다.
+- 파일 조합별 진행 기록이 남아 학습 대시보드(진행률, 최근 학습 시각, 이전 기록
+  드롭다운, 이 학습 다시 하기)로 확인·재사용할 수 있습니다.
+- 학습/연습/시험 중 언제든 "단어 순서 섞기"로 순서 암기를 방지할 수 있습니다.
+- 설정 화면에 처음 사용자를 위한 사용법 안내와, 저장된 학습 기록을 개별로 지울 수
+  있는 관리 UI가 있습니다.
+- "떠다니는 메모장", "세션 킵얼라이브" 등 Streamlit iframe 특유의 우회 기능은 필요
+  없어져 포팅하지 않았습니다.
+
+## 배운 점
+
+- 가장 좋은 요구사항은 내가 겪은 불편이다. 세션이 끊겨 처음부터 다시 하고, 진행
+  상황이 기기마다 따로 놀고, 같은 순서로 반복하다 보니 단어가 아니라 순서를 외우게
+  되고 — 기능 목록의 상당수가 실제로 짜증났던 순간에서 나왔습니다.
+- 정답/오답 2지선다는 암기의 실제를 담지 못한다. 4단계 자기 평가와 비율 기반
+  재삽입으로 바꾸고 나서야 "애매하게 아는 단어"가 적절한 간격으로 돌아오기
+  시작했습니다.
+- 인프라를 늘리지 않고 문제를 푸는 방법이 있다. DB를 세우는 대신 GitHub API를
+  단어장 데이터 계층으로, Supabase를 진행 상황 계층으로 나눠 쓴 선택은 개인 프로젝트의
+  제약(비용·운영 부담) 안에서 버전 관리까지 얻는 결과로 이어졌습니다.
+- 프레임워크를 바꾸는 것과 기능을 다시 설계하는 것은 다른 일이다. Streamlit에서
+  Next.js로 옮기면서도 망각 곡선 큐·파일 포맷·GitHub 데이터 구조는 그대로 가져오고,
+  프론트엔드가 실제로 손에 잡히는 부분(카드 전환, 하단 탭, 대시보드)만 다시
+  설계했습니다.
+
+## 개선 방향
+
+- 시험 파트에도 학습 대시보드(진행률/이어하기)를 적용하는 것을 검토 중입니다. 현재는
+  학습·연습 파트에만 있습니다.
+- 힌트 생성 LLM 호출을 앱 안에 직접 연동 (현재는 외부에서 생성 후 붙여넣기).
+- 학습 통계 대시보드를 일자별 학습량뿐 아니라 파트·카테고리별로 세분화.
+- 오프라인에서도 이미 받아둔 단어장으로 학습할 수 있도록 Service Worker 캐싱 보강.
+
+---
+
+## 기술 스택
+
+`Next.js (App Router)` · `TypeScript` · `Tailwind CSS` · `Framer Motion` · `Anime.js` ·
+`Supabase (Postgres)` · `GitHub Contents API` · `PWA`
