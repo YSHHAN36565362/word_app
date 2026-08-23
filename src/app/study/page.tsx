@@ -14,7 +14,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { shuffle } from "@/lib/queue";
-import { deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
+import { deleteProgress, saveProgress } from "@/lib/progress";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { FileRef, StudyProgress, WordEntry } from "@/lib/types";
 
@@ -29,7 +29,6 @@ export default function StudyPage() {
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
   const [starting, setStarting] = useState(false);
-  const [saved, setSaved] = useState<StudyProgress | null>(null);
 
   const [words, setWords] = useState<WordEntry[]>([]);
   const [index, setIndex] = useState(0);
@@ -37,13 +36,6 @@ export default function StudyPage() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [activeFilePaths, setActiveFilePaths] = useState<string[]>([]);
   const [activeFileLabels, setActiveFileLabels] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!ready || !userId) return;
-    loadProgress<StudyProgress>(userId, "study").then((p) => {
-      if (p && p.words && p.words.length > 0) setSaved(p);
-    });
-  }, [ready, userId]);
 
   async function begin() {
     if (selectedFiles.length === 0) return;
@@ -87,14 +79,22 @@ export default function StudyPage() {
   }, [selectedFiles, restoreRequest]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  function resume() {
-    if (!saved) return;
-    setWords(saved.words);
-    setIndex(saved.studyIndex);
-    setShowHint(false);
-    setActiveFilePaths(saved.filePaths ?? []);
-    setActiveFileLabels(saved.filesLabel ?? []);
-    setFocus(true);
+  // 이미 본 단어(index 이전)는 그대로 두고, 아직 안 본 단어들의 순서만 다시 섞는다.
+  // 매번 같은 순서로 반복해서 보면 내용이 아니라 "다음 단어가 뭐였는지" 순서로
+  // 외워버릴 수 있어서, 진행 중에도 원하면 순서를 바꿀 수 있게 한다.
+  function shuffleRemaining() {
+    setWords((prev) => {
+      const next = [...prev.slice(0, index), ...shuffle(prev.slice(index))];
+      if (userId && activeFilePaths.length > 0) {
+        saveProgress(userId, "study", {
+          words: next,
+          filesLabel: activeFileLabels,
+          filePaths: activeFilePaths,
+          studyIndex: index,
+        } as StudyProgress);
+      }
+      return next;
+    });
   }
 
   function goTo(nextIndex: number) {
@@ -216,7 +216,11 @@ export default function StudyPage() {
             )}
           </div>
         )}
-        <ExitFocusButton onExit={() => setSaved(null)} label="학습 종료하기" />
+        <ExitFocusButton
+          onExit={() => {}}
+          label="학습 종료하기"
+          extraAction={!done && words.length > 1 ? { label: "단어 순서 섞기", onClick: shuffleRemaining } : undefined}
+        />
       </FocusScreen>
     );
   }
@@ -237,17 +241,6 @@ export default function StudyPage() {
             내 번호
           </Link>
           를 설정하면 학습 진행 상황이 기기 간에 저장됩니다.
-        </div>
-      )}
-
-      {saved && (
-        <div className="mt-4 study-card p-4">
-          <div className="text-sm">
-            저장된 진행이 있습니다: {saved.studyIndex + 1} / {saved.words.length}번째 단어
-          </div>
-          <button onClick={resume} className="btn-3d btn-blue mt-3 w-full">
-            이어서 학습하기
-          </button>
         </div>
       )}
 

@@ -17,7 +17,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, shuffle } from "@/lib/queue";
-import { appendStudyStat, deleteProgress, loadProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
+import { appendStudyStat, deleteProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
 import { loadAllMastery, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
@@ -50,7 +50,6 @@ function PracticePageInner() {
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
   const [starting, setStarting] = useState(false);
-  const [saved, setSaved] = useState<PracticeProgress | null>(null);
 
   const [queue, setQueue] = useState<WordEntry[]>([]);
   const [current, setCurrent] = useState<WordEntry | null>(null);
@@ -70,13 +69,6 @@ function PracticePageInner() {
   // 잠깐 다음 단어의 정답이 보였다 사라지는 문제가 있었다. key를 바꿔 카드를 완전히
   // 새로 마운트하면 전환 애니메이션 없이 바로 앞면(새 단어)으로 나타나 이 문제가 없다.
   const [turnId, setTurnId] = useState(0);
-
-  useEffect(() => {
-    if (!ready || !userId) return;
-    loadProgress<PracticeProgress>(userId, "practice").then((p) => {
-      if (p && (p.queue?.length || p.currentWord)) setSaved(p);
-    });
-  }, [ready, userId]);
 
   function persist(next: { queue: WordEntry[]; current: WordEntry | null; total: number; done: number; side: 0 | 1; m: StudyMode; labels: string[]; paths: string[] }) {
     if (!userId) return;
@@ -157,21 +149,15 @@ function PracticePageInner() {
     setStarting(false);
   }
 
-  function resume() {
-    if (!saved) return;
-    setMode(saved.mode);
-    setQueue(saved.queue);
-    setCurrent(saved.currentWord);
-    setTotal(saved.totalCount);
-    setDoneCount(saved.doneCount);
-    setDisplaySide(saved.displaySide);
-    setShowAnswer(false);
-    setShowHint(false);
-    setResultSaved(false);
-    setFilesLabel(saved.filesLabel);
-    setActiveFilePaths(saved.filePaths ?? []);
-    setTurnId((t) => t + 1);
-    setFocus(true);
+  // 아직 채점 안 한 대기열의 순서만 다시 섞는다(현재 보여주고 있는 단어는 그대로 둔다).
+  // 같은 조합을 여러 번 반복하다 보면 내용이 아니라 "다음에 뭐가 나올지" 순서로
+  // 외워버릴 수 있어서, 진행 중에도 원하면 순서를 바꿀 수 있게 한다.
+  function shuffleQueue() {
+    setQueue((prev) => {
+      const next = shuffle(prev);
+      persist({ queue: next, current, total, done: doneCount, side: displaySide, m: mode, labels: filesLabel, paths: activeFilePaths });
+      return next;
+    });
   }
 
   function revealAnswer() {
@@ -320,7 +306,11 @@ function PracticePageInner() {
             </div>
           </div>
         )}
-        <ExitFocusButton onExit={() => setSaved(null)} label="연습 종료하기" />
+        <ExitFocusButton
+          onExit={() => {}}
+          label="연습 종료하기"
+          extraAction={!finished && queue.length > 1 ? { label: "단어 순서 섞기", onClick: shuffleQueue } : undefined}
+        />
       </FocusScreen>
     );
   }
@@ -341,17 +331,6 @@ function PracticePageInner() {
             내 번호
           </Link>
           를 설정하면 연습 진행 상황이 기기 간에 저장됩니다.
-        </div>
-      )}
-
-      {saved && (
-        <div className="mt-4 study-card p-4">
-          <div className="text-sm">
-            저장된 연습 진행이 있습니다: {saved.doneCount} / {saved.totalCount} 완료
-          </div>
-          <button onClick={resume} className="btn-3d btn-blue mt-3 w-full">
-            이어서 연습하기
-          </button>
         </div>
       )}
 

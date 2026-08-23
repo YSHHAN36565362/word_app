@@ -203,6 +203,15 @@ export default function ExamPage() {
     focus && !finished && current !== null
   );
 
+  // 아직 출제 안 한 대기열의 순서만 다시 섞는다(현재 보여주고 있는 단어는 그대로 둔다).
+  function shuffleQueue() {
+    setQueue((prev) => {
+      const next = shuffle(prev);
+      persist({ queue: next, current, total, num: currentNumber, correct: correctCount, wrong: wrongCount, side: displaySide, m: mode, labels: filesLabel });
+      return next;
+    });
+  }
+
   function retryWrongOnly() {
     if (wrongWords.length === 0) return;
     const q = [...wrongWords];
@@ -311,7 +320,11 @@ export default function ExamPage() {
             )}
           </div>
         )}
-        <ExitFocusButton onExit={() => setSaved(null)} label="시험 종료하기" />
+        <ExitFocusButton
+          onExit={() => setSaved(null)}
+          label="시험 종료하기"
+          extraAction={!finished && queue.length > 1 ? { label: "단어 순서 섞기", onClick: shuffleQueue } : undefined}
+        />
       </FocusScreen>
     );
   }
