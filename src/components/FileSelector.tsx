@@ -1,20 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CategoryNode, FileRef, WordTree } from "@/lib/types";
 import { extractYearMonth } from "@/lib/parser";
 
 interface Props {
   onSelectionChange: (files: FileRef[]) => void;
+  /**
+   * 외부(예: 이전 학습 기록의 "이 학습 다시 하기")에서 특정 파일 경로들을 강제로
+   * 선택 상태로 만들고 싶을 때 넘긴다. 버튼을 누를 때마다 새 배열을 넘기면(내용이
+   * 같아도) 매번 다시 적용된다. 대분류/세부카테고리/월 아코디언까지 자동으로 맞춰준다.
+   */
+  restorePaths?: string[] | null;
 }
 
-export default function FileSelector({ onSelectionChange }: Props) {
+export default function FileSelector({ onSelectionChange, restorePaths }: Props) {
   const [tree, setTree] = useState<WordTree | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [mainCat, setMainCat] = useState<string | null>(null);
   const [selectedSubs, setSelectedSubs] = useState<Set<string>>(new Set());
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(new Set());
+  const detailsRefs = useRef<Map<string, HTMLDetailsElement>>(new Map());
 
   useEffect(() => {
     fetch("/api/wordlist/tree")
@@ -33,6 +40,46 @@ export default function FileSelector({ onSelectionChange }: Props) {
         setLoading(false);
       });
   }, []);
+
+  // 외부에서 파일 조합을 복원 요청하면, 그 파일들이 들어있는 대분류/세부카테고리로
+  // 전환하고 체크 상태까지 맞춘다. 트리가 아직 없으면(로딩 중) 로드된 뒤에 다시 시도된다.
+  // restorePaths가 바뀔 때만 외부 요청을 React 상태로 동기화하는 것이라 setState를
+  // 곧바로 호출해도 안전하다(SSR/하이드레이션 순서 문제 없음).
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!tree || !restorePaths || restorePaths.length === 0) return;
+    const pathSet = new Set(restorePaths);
+
+    for (const cat of tree.categories) {
+      if (cat.subfolders.length > 0) {
+        const matchedSubs = new Set<string>();
+        const matchedPaths = new Set<string>();
+        for (const sub of cat.subfolders) {
+          for (const f of sub.files) {
+            if (pathSet.has(f.path)) {
+              matchedSubs.add(sub.name);
+              matchedPaths.add(f.path);
+            }
+          }
+        }
+        if (matchedPaths.size > 0) {
+          setMainCat(cat.name);
+          setSelectedSubs(matchedSubs);
+          setCheckedPaths(matchedPaths);
+          return;
+        }
+      } else {
+        const matchedPaths = new Set(cat.files.filter((f) => pathSet.has(f.path)).map((f) => f.path));
+        if (matchedPaths.size > 0) {
+          setMainCat(cat.name);
+          setSelectedSubs(new Set());
+          setCheckedPaths(matchedPaths);
+          return;
+        }
+      }
+    }
+  }, [tree, restorePaths]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const currentCategory: CategoryNode | undefined = useMemo(
     () => tree?.categories.find((c) => c.name === mainCat),
@@ -69,6 +116,18 @@ export default function FileSelector({ onSelectionChange }: Props) {
       files: [...files].sort((a, b) => b.filename.localeCompare(a.filename)),
     }));
   }, [visibleFiles]);
+
+  // 복원된 체크 파일이 속한 월 그룹을 자동으로 펼쳐서, 체크된 걸 스크롤 없이도 바로 보이게 한다.
+  useEffect(() => {
+    if (!restorePaths || restorePaths.length === 0) return;
+    const pathSet = new Set(restorePaths);
+    for (const group of monthGroups) {
+      if (group.files.some((f) => pathSet.has(f.path))) {
+        const el = detailsRefs.current.get(group.key);
+        if (el) el.open = true;
+      }
+    }
+  }, [monthGroups, restorePaths]);
 
   useEffect(() => {
     const selected = visibleFiles.filter((f) => checkedPaths.has(f.path));
@@ -192,7 +251,16 @@ export default function FileSelector({ onSelectionChange }: Props) {
 
       <div className="flex flex-col gap-2">
         {monthGroups.map((group, idx) => (
-          <details key={group.key} open={idx === 0} className="rounded-2xl border overflow-hidden" style={{ borderColor: "var(--card-border)" }}>
+          <details
+            key={group.key}
+            ref={(el) => {
+              if (el) detailsRefs.current.set(group.key, el);
+              else detailsRefs.current.delete(group.key);
+            }}
+            open={idx === 0}
+            className="rounded-2xl border overflow-hidden"
+            style={{ borderColor: "var(--card-border)" }}
+          >
             <summary
               className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5 text-sm font-bold select-none [&::-webkit-details-marker]:hidden"
               style={{ background: "var(--hint-bg)", color: "var(--text)" }}

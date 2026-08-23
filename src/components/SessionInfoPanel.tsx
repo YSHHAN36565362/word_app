@@ -9,15 +9,17 @@ interface Props {
   ready: boolean;
   part: Part;
   selectedFiles: FileRef[];
+  onRestore?: (paths: string[]) => void;
 }
 
 /**
  * 파일 선택 버튼들 바로 아래에 두는 요약 패널.
  * "내 번호 / 선택한 파일 / 최근 학습 시간 / 진행률"을 보여주고, 이 파트에서 예전에
- * 공부했던 다른 파일 조합들을 드롭다운으로 훑어볼 수 있다(과거 기록 보기 전용 —
- * 고르면 그 조합의 기록만 보여줄 뿐, 실제 체크박스를 바꾸진 않는다).
+ * 공부했던 다른 파일 조합들을 드롭다운으로 훑어볼 수 있다. 과거 기록을 고르면 그
+ * 조합의 진행 상황을 미리 보여주고, [이 학습 다시 하기] 버튼으로 그 파일 조합을
+ * 실제 체크박스 선택 상태로 복원할 수 있다.
  */
-export default function SessionInfoPanel({ userId, ready, part, selectedFiles }: Props) {
+export default function SessionInfoPanel({ userId, ready, part, selectedFiles, onRestore }: Props) {
   const [logs, setLogs] = useState<LearningLogEntry[]>([]);
   const [viewingKey, setViewingKey] = useState<string>(""); // "" = 현재 선택된 파일 기준
 
@@ -34,6 +36,7 @@ export default function SessionInfoPanel({ userId, ready, part, selectedFiles }:
   const displaySummary = viewed ? viewed.fileSummary : currentLabel || "선택된 파일 없음";
   const displayLog = viewed ?? currentLog;
   const percent = displayLog && displayLog.totalCount > 0 ? Math.round((displayLog.doneCount / displayLog.totalCount) * 100) : 0;
+  const remain = displayLog ? Math.max(0, displayLog.totalCount - displayLog.doneCount) : 0;
 
   return (
     <div className="mt-4 study-card p-4">
@@ -48,10 +51,14 @@ export default function SessionInfoPanel({ userId, ready, part, selectedFiles }:
 
         <span style={{ color: "var(--text-muted)" }}>최근 학습</span>
         <span className="text-right font-bold">{displayLog ? formatKstDateTime(displayLog.updatedAt) : "기록 없음"}</span>
+      </div>
 
+      <div className="mt-2 flex items-center justify-between gap-2 text-xs">
         <span style={{ color: "var(--text-muted)" }}>진행률</span>
         <span className="text-right font-bold" style={{ color: "var(--accent)" }}>
-          {displayLog ? `${percent}%` : "-"}
+          {displayLog
+            ? `${percent}% (${displayLog.doneCount} / ${displayLog.totalCount}개 완료, ${remain}개 남음)`
+            : "-"}
         </span>
       </div>
 
@@ -76,6 +83,18 @@ export default function SessionInfoPanel({ userId, ready, part, selectedFiles }:
               </option>
             ))}
           </select>
+
+          {viewed && onRestore && (
+            <button
+              onClick={() => {
+                onRestore(viewed.fileKey.split("|"));
+                setViewingKey("");
+              }}
+              className="btn-3d btn-ghost mt-2 w-full py-1.5 text-xs"
+            >
+              이 학습 다시 하기
+            </button>
+          )}
         </div>
       )}
     </div>

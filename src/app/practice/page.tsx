@@ -39,6 +39,7 @@ function PracticePageInner() {
   const fromWrongNotes = searchParams.get("from") === "wrongnotes";
 
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
+  const [restorePaths, setRestorePaths] = useState<string[] | null>(null);
   const [starting, setStarting] = useState(false);
   const [saved, setSaved] = useState<PracticeProgress | null>(null);
 
@@ -345,7 +346,7 @@ function PracticePageInner() {
       )}
 
       <div className="mt-5">
-        <FileSelector onSelectionChange={setSelectedFiles} />
+        <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restorePaths} />
       </div>
 
       <div className="mt-5 grid grid-cols-3 gap-2">
@@ -360,7 +361,13 @@ function PracticePageInner() {
         </button>
       </div>
 
-      <SessionInfoPanel userId={userId} ready={ready} part="practice" selectedFiles={selectedFiles} />
+      <SessionInfoPanel
+        userId={userId}
+        ready={ready}
+        part="practice"
+        selectedFiles={selectedFiles}
+        onRestore={setRestorePaths}
+      />
     </div>
   );
 }

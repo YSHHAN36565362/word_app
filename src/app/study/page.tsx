@@ -23,6 +23,7 @@ export default function StudyPage() {
   const { userId, ready } = useUserId();
 
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
+  const [restorePaths, setRestorePaths] = useState<string[] | null>(null);
   const [starting, setStarting] = useState(false);
   const [saved, setSaved] = useState<StudyProgress | null>(null);
 
@@ -231,7 +232,7 @@ export default function StudyPage() {
       )}
 
       <div className="mt-5">
-        <FileSelector onSelectionChange={setSelectedFiles} />
+        <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restorePaths} />
       </div>
 
       <button onClick={begin} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent mt-5 w-full">
@@ -245,7 +246,13 @@ export default function StudyPage() {
         )}
       </button>
 
-      <SessionInfoPanel userId={userId} ready={ready} part="study" selectedFiles={selectedFiles} />
+      <SessionInfoPanel
+        userId={userId}
+        ready={ready}
+        part="study"
+        selectedFiles={selectedFiles}
+        onRestore={setRestorePaths}
+      />
     </div>
   );
 }
