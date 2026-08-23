@@ -14,9 +14,10 @@ import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
-import { shuffle } from "@/lib/queue";
+import { shuffle, wordKey } from "@/lib/queue";
 import { deleteProgress, saveProgress } from "@/lib/progress";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
+import { addFavorite, loadFavoriteKeys, removeFavorite } from "@/lib/favorites";
 import { FileRef, StudyProgress, WordEntry } from "@/lib/types";
 
 interface RestoreRequest {
@@ -37,6 +38,11 @@ export default function StudyPage() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [activeFilePaths, setActiveFilePaths] = useState<string[]>([]);
   const [activeFileLabels, setActiveFileLabels] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!ready || !userId) return;
+    loadFavoriteKeys(userId).then(setFavorites);
+  }, [ready, userId]);
 
   async function begin() {
     if (selectedFiles.length === 0) return;
@@ -123,13 +129,19 @@ export default function StudyPage() {
     goTo(index - 1);
   }
 
-  function toggleFavorite(word: string) {
+  function toggleFavorite(word: WordEntry) {
+    const key = wordKey(word);
+    const isFavorited = favorites.has(key);
     setFavorites((prev) => {
       const next = new Set(prev);
-      if (next.has(word)) next.delete(word);
-      else next.add(word);
+      if (isFavorited) next.delete(key);
+      else next.add(key);
       return next;
     });
+    if (userId) {
+      if (isFavorited) removeFavorite(userId, word);
+      else addFavorite(userId, word);
+    }
   }
 
   const done = index >= words.length;
@@ -191,8 +203,8 @@ export default function StudyPage() {
               <div className="text-2xl font-extrabold" style={{ color: "var(--blue)" }}>
                 {current.word}
               </div>
-              <button onClick={() => toggleFavorite(current.word)} className="text-lg" aria-label="즐겨찾기">
-                {favorites.has(current.word) ? "★" : "☆"}
+              <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
+                {favorites.has(wordKey(current)) ? "★" : "☆"}
               </button>
             </div>
             <div className="text-lg font-semibold text-center">{current.meaning}</div>

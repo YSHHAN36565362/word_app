@@ -68,6 +68,40 @@ alter table learning_log add column if not exists mode text;
 
 create index if not exists learning_log_user_part_idx on learning_log (user_id, part, updated_at desc);
 
+-- 하루에 한 번이라도 학습(학습/연습/시험/지문 중 아무거나)했으면 그 날짜로 한 행만
+-- 남긴다. "연속 학습일(스트릭)" 계산에 쓰인다 — Duolingo류 앱의 스트릭과 같은 개념.
+create table if not exists daily_activity (
+  user_id text not null,
+  date date not null,
+  primary key (user_id, date)
+);
+
+create index if not exists daily_activity_user_idx on daily_activity (user_id, date desc);
+
+-- 즐겨찾기(별표) 단어. 학습/연습 화면에서 별표를 누르면 기기 간에 동기화되어 저장된다
+-- (Quizlet의 "starred terms"와 같은 개념). 오답 노트와 달리 자동으로 쌓이지 않고
+-- 사용자가 직접 고른 단어만 들어간다.
+create table if not exists favorites (
+  user_id text not null,
+  word_key text not null,
+  word text not null,
+  meaning text not null,
+  hint text not null default '',
+  created_at timestamptz not null default now(),
+  primary key (user_id, word_key)
+);
+
+create index if not exists favorites_user_idx on favorites (user_id, created_at desc);
+
+-- 매칭 게임(단어-뜻 짝맞추기)의 파일 조합별 최고 기록(가장 빠른 완료 시간, ms).
+create table if not exists match_scores (
+  user_id text not null,
+  file_key text not null,
+  best_ms int not null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, file_key)
+);
+
 -- Row Level Security: anon key로 접근하는 클라이언트 전용 테이블이므로,
 -- 익명 역할(anon)에 전체 CRUD를 허용한다. (실 서비스 수준 보안은 아니며,
 -- 기존 앱의 "번호만 알면 됨" 신뢰 모델을 그대로 웹으로 옮긴 것)
@@ -76,6 +110,9 @@ alter table wrong_notes enable row level security;
 alter table study_stats enable row level security;
 alter table word_mastery enable row level security;
 alter table learning_log enable row level security;
+alter table daily_activity enable row level security;
+alter table favorites enable row level security;
+alter table match_scores enable row level security;
 
 drop policy if exists "anon full access" on progress;
 create policy "anon full access" on progress for all to anon using (true) with check (true);
@@ -91,3 +128,12 @@ create policy "anon full access" on word_mastery for all to anon using (true) wi
 
 drop policy if exists "anon full access" on learning_log;
 create policy "anon full access" on learning_log for all to anon using (true) with check (true);
+
+drop policy if exists "anon full access" on daily_activity;
+create policy "anon full access" on daily_activity for all to anon using (true) with check (true);
+
+drop policy if exists "anon full access" on favorites;
+create policy "anon full access" on favorites for all to anon using (true) with check (true);
+
+drop policy if exists "anon full access" on match_scores;
+create policy "anon full access" on match_scores for all to anon using (true) with check (true);

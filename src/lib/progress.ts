@@ -3,6 +3,7 @@
 import { getSupabaseAsync } from "./supabase";
 import { StudyStatRecord, WordEntry } from "./types";
 import { wordKey } from "./queue";
+import { markTodayActive } from "./streak";
 
 /**
  * Supabase에 저장하는 진행 상황/오답노트/통계 데이터 레이어.
@@ -14,6 +15,9 @@ export async function saveProgress(userId: string, part: string, data: unknown):
   if (!userId) return false;
   const supabase = await getSupabaseAsync();
   if (!supabase) return false;
+  // 파트에 상관없이 "오늘 뭔가 했다"만 기록하면 되므로 여기서 한 번에 처리한다
+  // (실패해도 진행 상황 저장 자체는 막지 않도록 await하지 않는다).
+  markTodayActive(userId);
   const { error } = await supabase
     .from("progress")
     .upsert({ user_id: userId, part, data, updated_at: new Date().toISOString() }, { onConflict: "user_id,part" });

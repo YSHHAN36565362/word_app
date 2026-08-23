@@ -141,6 +141,16 @@ body {
   box-shadow: 0 1px 0 #c99f00;
 }
 
+/* 매칭 게임 전용 색(보라) — 다른 파트와 구분되는 "게임" 느낌을 준다 */
+.btn-purple {
+  background: #8b5cf6;
+  color: #ffffff;
+  box-shadow: 0 4px 0 #6d3fd6;
+}
+.btn-purple:active:not(:disabled) {
+  box-shadow: 0 1px 0 #6d3fd6;
+}
+
 /* ---------- 카드 ---------- */
 .study-card {
   background: var(--card);

@@ -17,13 +17,15 @@ import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
-import { getDisplaySide, requeuePosition, shuffle } from "@/lib/queue";
+import { getDisplaySide, requeuePosition, shuffle, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
 import { loadAllMastery, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
+import { addFavorite, loadFavoriteKeys, loadFavorites, removeFavorite } from "@/lib/favorites";
 import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
 
 const WRONG_NOTES_PATH_KEY = "__wrong_notes__";
+const FAVORITES_PATH_KEY = "__favorites__";
 
 interface RestoreRequest {
   paths: string[];
@@ -47,6 +49,7 @@ function PracticePageInner() {
   const { userId, ready } = useUserId();
   const searchParams = useSearchParams();
   const fromWrongNotes = searchParams.get("from") === "wrongnotes";
+  const fromFavorites = searchParams.get("from") === "favorites";
 
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
@@ -70,6 +73,27 @@ function PracticePageInner() {
   // 잠깐 다음 단어의 정답이 보였다 사라지는 문제가 있었다. key를 바꿔 카드를 완전히
   // 새로 마운트하면 전환 애니메이션 없이 바로 앞면(새 단어)으로 나타나 이 문제가 없다.
   const [turnId, setTurnId] = useState(0);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!ready || !userId) return;
+    loadFavoriteKeys(userId).then(setFavorites);
+  }, [ready, userId]);
+
+  function toggleFavorite(word: WordEntry) {
+    const key = wordKey(word);
+    const isFavorited = favorites.has(key);
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (isFavorited) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+    if (userId) {
+      if (isFavorited) removeFavorite(userId, word);
+      else addFavorite(userId, word);
+    }
+  }
 
   function persist(next: { queue: WordEntry[]; current: WordEntry | null; total: number; done: number; side: 0 | 1; m: StudyMode; labels: string[]; paths: string[] }) {
     if (!userId) return;
@@ -147,6 +171,14 @@ function PracticePageInner() {
     setStarting(true);
     const [list, mastery] = await Promise.all([loadWrongNotes(userId), loadAllMastery(userId)]);
     startWithList(list, mastery, "random", ["오답 노트"], [WRONG_NOTES_PATH_KEY]);
+    setStarting(false);
+  }
+
+  async function beginFromFavorites() {
+    if (!userId) return;
+    setStarting(true);
+    const [list, mastery] = await Promise.all([loadFavorites(userId), loadAllMastery(userId)]);
+    startWithList(list, mastery, "random", ["즐겨찾기"], [FAVORITES_PATH_KEY]);
     setStarting(false);
   }
 
@@ -273,6 +305,11 @@ function PracticePageInner() {
       >
         {!finished && current ? (
           <div className="mt-3">
+            <div className="mb-1.5 flex justify-end">
+              <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
+                {favorites.has(wordKey(current)) ? "★" : "☆"}
+              </button>
+            </div>
             <FlashCard
               key={turnId}
               flipped={showAnswer}
@@ -348,6 +385,22 @@ function PracticePageInner() {
               </>
             ) : (
               "오답 노트로 연습 시작"
+            )}
+          </button>
+        </div>
+      )}
+
+      {fromFavorites && userId && (
+        <div className="mt-4 study-card p-4">
+          <div className="text-sm">즐겨찾기한 단어로 바로 연습을 시작합니다.</div>
+          <button onClick={beginFromFavorites} disabled={starting} className="btn-3d btn-amber mt-3 w-full">
+            {starting ? (
+              <>
+                <Spinner size={16} className="mr-2" />
+                불러오는 중...
+              </>
+            ) : (
+              "즐겨찾기로 연습 시작"
             )}
           </button>
         </div>

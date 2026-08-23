@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { animate, splitText, stagger } from "animejs";
 import { daysUntilJLPT } from "@/lib/dday";
+import { useUserId } from "@/hooks/useUserId";
+import { loadStreak } from "@/lib/streak";
 
 // splitText로 글자 단위 span을 만든 뒤 이 클래스들을 타겟으로 삼아 위아래로 둥실둥실
 // 계속 움직이게 한다(말풍선들과 같은 "살아있는" 느낌을 D-day 카드에도 준다).
@@ -25,6 +27,13 @@ export default function Home() {
   const ddayRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLDivElement>(null);
+  const { userId, ready } = useUserId();
+  const [streak, setStreak] = useState<number>(0);
+
+  useEffect(() => {
+    if (!ready || !userId) return;
+    loadStreak(userId).then((s) => setStreak(s.current));
+  }, [ready, userId]);
 
   useEffect(() => {
     // new Date() 기반 계산이라 정적 프리렌더 시점(빌드 시각)이 아니라 마운트 후 실제
@@ -162,6 +171,18 @@ export default function Home() {
       >
         매일 조금씩, 확실하게 외우기
       </motion.p>
+
+      {streak > 0 && (
+        <motion.div
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold"
+          style={{ background: "var(--accent-soft)", color: "var(--accent-dark)" }}
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.72, type: "spring", stiffness: 260, damping: 16 }}
+        >
+          연속 학습 {streak}일째
+        </motion.div>
+      )}
 
       <motion.div
         className="mt-6 w-full rounded-2xl px-6 py-5"

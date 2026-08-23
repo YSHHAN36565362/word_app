@@ -78,6 +78,8 @@ Streamlit版(`word_test`)を2ヶ月以上毎日使ってみて、機能よりも
 | 5 | 文章暗記 | 会話文・読解文を一文ずつめくりながら暗唱 |
 | 6 | 誤答ノート | 試験で間違えた単語を集めて確認し、その単語だけで練習をすぐに開始 |
 | 7 | 統計 | 日別の練習・試験回数と正答率を確認 |
+| 8 | お気に入り | 星印を付けた単語だけを集めて確認・再練習 |
+| 9 | マッチングゲーム | 単語と意味のタイルを素早く揃えるミニゲーム。最速記録を保存 |
 
 #### 学習パート
 
@@ -175,6 +177,23 @@ Supabaseの`word_mastery`テーブルに保存し、次に練習・試験を始�
 ファイルの組み合わせごとの進捗記録は(ユーザー番号、パート、ファイルの組み合わせ)
 単位で別途保存され、セッションが終わった後も最後の進捗率と学習時刻が残ります。
 
+### 他の暗記アプリを参考にした機能
+
+Anki・Quizlet・Duolingoなど代表的な暗記/語学アプリを調べ、word_appの構造に合う形で
+3つの機能を追加しました。
+
+- **連続学習日(ストリーク)** — Duolingoの「ストリーク」と同じ考え方です。学習・練習・
+  試験・文章のいずれかを1日1回でも行うとその日が記録され、ホーム画面に「連続学習
+  N日目」と表示されます。1日でも空くとストリークは途切れ、また1日目から始まります。
+- **お気に入り(星印)単語** — Quizletの「starred terms」に相当します。学習・練習画面で
+  単語横の星印(☆)を押すとサーバーに永続保存され、「その他 > お気に入り」で一覧
+  確認・その単語だけで再練習ができます。誤答ノートと違い自動では溜まらず、自分で
+  選んだ単語だけが入ります。
+- **マッチングゲーム** — Quizletの「Match」ゲームに相当します。選んだファイルから
+  ランダムに6組(タイル12枚)を出題し、単語と意味のタイルをできるだけ早く揃えます。
+  完了タイムを計測し、その組み合わせでの自己ベストより速ければ新記録として保存
+  されます。
+
 ---
 
 ### GitHubを単語帳データベースとして
@@ -213,6 +232,9 @@ Streamlit版は進捗もGitHubコミットとして保存していましたが�
 | `learning_log` | ファイルの組み合わせごとの進捗記録 — 完了後も残り、ダッシュボード/再開機能に使用 |
 | `wrong_notes` | 誤答ノート |
 | `study_stats` | 日別の学習統計 |
+| `daily_activity` | 学習した日の記録(連続学習日/ストリーク計算用) |
+| `favorites` | お気に入り(星印)単語 |
+| `match_scores` | マッチングゲームのファイル組み合わせ別最速タイム |
 
 ---
 
@@ -296,7 +318,7 @@ Streamlit版は進捗もGitHubコミットとして保存していましたが�
 ```
 src/
   app/
-    study/ practice/ exam/ wrongnotes/ stats/ script/ wordbook/  # 各パートのページ
+    study/ practice/ exam/ wrongnotes/ favorites/ match/ stats/ script/ wordbook/  # 各パートのページ
     more/                        # その他メニュー
       guide/                     # 使い方説明(パート別/便利機能をスクリーンショット付きで案内)
       settings/                  # 設定(マイ番号・テーマ・学習記録管理)
@@ -308,9 +330,9 @@ src/
       wordbook/                  # 単語帳追加 (GitHubコミット、パスワード検証)
   components/                    # FileSelector, FlashCard(3Dフリップ), Mascot, SessionInfoPanel, UsageGuide, PageHeader, PageTransition など
   contexts/                      # ThemeContext(ダークモード), FocusModeContext(集中モード)
-  lib/                           # parser, queue(忘却曲線), mastery(習熟度), learningLog(ダッシュボード), github(サーバー専用), supabase
+  lib/                           # parser, queue(忘却曲線), mastery(習熟度), learningLog(ダッシュボード), streak(連続学習日), favorites(お気に入り), matchScores(マッチングゲーム記録), github(サーバー専用), supabase
   hooks/useUserId.ts             # localStorage + URLクエリ(?uid=)ベースの「マイ番号」
-supabase/schema.sql              # progress / word_mastery / learning_log / wrong_notes / study_stats テーブル + RLS
+supabase/schema.sql              # progress / word_mastery / learning_log / daily_activity / favorites / match_scores / wrong_notes / study_stats テーブル + RLS
 scripts/generate-icons.mjs       # PWAアイコン(PNG)生成スクリプト
 public/images/                   # 下部ナビアイコン + 練習/学習フィードバックキャラクター画像
 images/                          # README用スクリーンショット
@@ -483,6 +505,8 @@ Streamlit 버전(`word_test`)으로 두 달 넘게 매일 써보니, 기능보�
 | 5 | 지문 암기 | 회화문·독해 지문을 한 문장씩 넘기며 암송 |
 | 6 | 오답 노트 | 시험에서 틀린 단어를 모아보고, 그 단어들로 바로 연습을 시작 |
 | 7 | 통계 | 날짜별 연습·시험 횟수와 정답률 확인 |
+| 8 | 즐겨찾기 | 별표 표시한 단어만 모아 확인·재연습 |
+| 9 | 매칭 게임 | 단어-뜻 타일을 빠르게 짝맞추는 미니 게임. 최고 기록 저장 |
 
 #### 학습 파트
 
@@ -579,6 +603,22 @@ Streamlit 버전에서는 이 큐가 **세션 안에서만** 동작해서, 브�
 파일 조합별 진행 기록은 (사용자 번호, 파트, 파일 조합) 단위로 별도 저장되어, 세션이
 끝난 뒤에도 마지막 진행률과 학습 시각이 남습니다.
 
+### 다른 암기 앱을 참고해 추가한 기능
+
+Anki·Quizlet·Duolingo 같은 대표적인 암기/어학 앱들을 조사해서, word_app 구조에 맞는
+형태로 세 가지 기능을 추가했습니다.
+
+- **연속 학습일(스트릭)** — Duolingo의 "스트릭"과 같은 개념입니다. 학습/연습/시험/
+  지문 중 무엇이든 하루에 한 번만 해도 그 날짜가 기록되고, 홈 화면에 "연속 학습
+  N일째"로 표시됩니다. 하루라도 건너뛰면 스트릭이 끊기고 다시 1일부터 시작합니다.
+- **즐겨찾기(별표) 단어** — Quizlet의 "starred terms"에 해당합니다. 학습·연습 화면에서
+  단어 옆 별표(☆)를 누르면 서버에 영구 저장되고, "더보기 &gt; 즐겨찾기"에서 목록
+  확인·그 단어들로만 재연습을 할 수 있습니다. 오답 노트와 달리 자동으로 쌓이지 않고
+  직접 고른 단어만 들어갑니다.
+- **매칭 게임** — Quizlet의 "Match" 게임에 해당합니다. 선택한 파일에서 무작위로 6쌍
+  (타일 12개)을 출제해, 단어와 뜻 타일을 최대한 빨리 짝짓습니다. 완료 시간을 측정해
+  그 조합의 기존 최고 기록보다 빠르면 새 기록으로 저장합니다.
+
 ---
 
 ### GitHub을 단어장 데이터베이스로
@@ -618,6 +658,9 @@ Streamlit 버전은 진행 상황도 GitHub 커밋으로 저장했지만, word_a
 | `learning_log` | 파일 조합별 진행 기록 — 완료 후에도 남아서 대시보드/이어하기에 사용 |
 | `wrong_notes` | 오답 노트 |
 | `study_stats` | 날짜별 학습 통계 |
+| `daily_activity` | 학습한 날짜 기록 (연속 학습일/스트릭 계산용) |
+| `favorites` | 즐겨찾기(별표) 단어 |
+| `match_scores` | 매칭 게임의 파일 조합별 최고 기록 |
 
 ---
 
@@ -700,7 +743,7 @@ Streamlit 버전은 진행 상황도 GitHub 커밋으로 저장했지만, word_a
 ```
 src/
   app/
-    study/ practice/ exam/ wrongnotes/ stats/ script/ wordbook/  # 각 파트 페이지
+    study/ practice/ exam/ wrongnotes/ favorites/ match/ stats/ script/ wordbook/  # 각 파트 페이지
     more/                        # 더보기 메뉴
       guide/                     # 사용법 설명 (파트별/편의 기능을 스크린샷과 함께 안내)
       settings/                  # 설정 (내 번호 · 테마 · 학습 기록 관리)
@@ -712,9 +755,9 @@ src/
       wordbook/                  # 단어장 추가 (GitHub 커밋, 비밀번호 검증)
   components/                    # FileSelector, FlashCard(3D 플립), Mascot, SessionInfoPanel, UsageGuide, PageHeader, PageTransition 등
   contexts/                      # ThemeContext(다크모드), FocusModeContext(집중 모드)
-  lib/                           # parser, queue(망각곡선), mastery(숙련도), learningLog(대시보드), github(서버 전용), supabase
+  lib/                           # parser, queue(망각곡선), mastery(숙련도), learningLog(대시보드), streak(연속 학습일), favorites(즐겨찾기), matchScores(매칭 게임 기록), github(서버 전용), supabase
   hooks/useUserId.ts             # localStorage + URL 쿼리(?uid=) 기반 "내 번호"
-supabase/schema.sql              # progress / word_mastery / learning_log / wrong_notes / study_stats 테이블 + RLS
+supabase/schema.sql              # progress / word_mastery / learning_log / daily_activity / favorites / match_scores / wrong_notes / study_stats 테이블 + RLS
 scripts/generate-icons.mjs       # PWA 아이콘(PNG) 생성 스크립트
 public/images/                   # 하단 네비 아이콘 + 연습/학습 피드백 캐릭터 이미지
 images/                          # README용 스크린샷
