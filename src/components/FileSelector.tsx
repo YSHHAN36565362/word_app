@@ -23,15 +23,35 @@ export default function FileSelector({ onSelectionChange, restorePaths }: Props)
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(new Set());
   const detailsRefs = useRef<Map<string, HTMLDetailsElement>>(new Map());
 
+  // restorePaths의 "최신 값"을 fetch 완료 시점에 읽기 위한 ref. 개발 모드(React
+  // Strict Mode)에서는 마운트 시 이 effect가 두 번 실행되어 트리 fetch도 두 번
+  // 나갈 수 있는데, 그중 하나가 restorePaths 복원이 끝난 뒤에 뒤늦게 도착하면
+  // 아래 "기본 카테고리" 지정 로직이 방금 복원된 선택을 되돌려버리는 문제가 있었다.
+  const restorePathsRef = useRef(restorePaths);
+  useEffect(() => {
+    restorePathsRef.current = restorePaths;
+  }, [restorePaths]);
+  // 트리를 불러온 뒤 "기본 카테고리"를 정하는 건 처음 한 번만 해야 한다 — 두 번째
+  // fetch 응답이 늦게 와도 다시 기본값으로 되돌리지 않도록 가드한다.
+  const categoryInitializedRef = useRef(false);
+
   useEffect(() => {
     fetch("/api/wordlist/tree")
       .then((r) => r.json())
       .then((data: WordTree) => {
         setTree(data);
         if (data.error) setError(data.error);
-        if (data.categories.length > 0) {
-          setMainCat(data.categories[0].name);
-          setSelectedSubs(new Set(data.categories[0].subfolders.map((s) => s.name)));
+        if (!categoryInitializedRef.current) {
+          // 복원 요청이 대기 중이면 기본 카테고리를 정하지 않고, 아래 복원 effect가
+          // 알맞은 카테고리/체크 상태를 대신 정하도록 넘긴다.
+          const hasPendingRestore = !!restorePathsRef.current && restorePathsRef.current.length > 0;
+          if (data.categories.length > 0 && !hasPendingRestore) {
+            categoryInitializedRef.current = true;
+            setMainCat(data.categories[0].name);
+            setSelectedSubs(new Set(data.categories[0].subfolders.map((s) => s.name)));
+          } else if (hasPendingRestore) {
+            categoryInitializedRef.current = true;
+          }
         }
         setLoading(false);
       })

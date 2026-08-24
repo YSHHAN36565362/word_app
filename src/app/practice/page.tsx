@@ -33,6 +33,8 @@ const REVIEW_PATH_KEY = "__review__";
 interface RestoreRequest {
   paths: string[];
   mode: StudyMode;
+  /** true면 체크박스 복원 후 자동으로 연습을 시작한다. false면 체크박스/대시보드만 맞춰준다. */
+  autoStart: boolean;
 }
 
 function isStudyMode(v: string | null): v is StudyMode {
@@ -155,19 +157,21 @@ function PracticePageInner() {
     setStarting(false);
   }
 
-  // [이 학습 다시 하기]로 복원 요청이 들어오면, FileSelector가 그 파일들을 실제
-  // 체크박스 선택(selectedFiles)으로 반영할 때까지 기다렸다가 저장돼 있던 모드로
-  // 자동으로 연습을 시작한다. (기록에 있던 파일이 GitHub에서 지워졌다면 완전히 같은
-  // 조합이 되지 않을 수 있어 fileKey가 정확히 일치할 때만 시작한다.)
+  // 복원 요청이 들어오면, FileSelector가 그 파일들을 실제 체크박스 선택(selectedFiles)으로
+  // 반영할 때까지 기다린다. [이 학습 다시 하기]처럼 autoStart가 true면 저장돼 있던
+  // 모드로 그대로 연습을 시작하고, 연습을 마치고 나왔을 때처럼 false면 체크박스와
+  // 대시보드만 방금 연습한 파일 조합으로 맞춰서 "진행 상황이 저장됐다"는 게 바로
+  // 보이게만 한다. (기록에 있던 파일이 GitHub에서 지워졌다면 완전히 같은 조합이 되지
+  // 않을 수 있어 fileKey가 정확히 일치할 때만 처리한다.)
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!restoreRequest || selectedFiles.length === 0) return;
     const selectedKey = fileKeyOf(selectedFiles.map((f) => f.path));
     const targetKey = fileKeyOf(restoreRequest.paths);
     if (selectedKey !== targetKey) return;
-    const modeToStart = restoreRequest.mode;
+    const { mode: modeToStart, autoStart } = restoreRequest;
     setRestoreRequest(null);
-    begin(modeToStart);
+    if (autoStart) begin(modeToStart);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFiles, restoreRequest]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -366,7 +370,18 @@ function PracticePageInner() {
           </div>
         )}
         <ExitFocusButton
-          onExit={() => {}}
+          onExit={() => {
+            // 종료 직후 방금 연습한 파일 조합으로 체크박스/대시보드를 다시 맞춰서,
+            // 방금 한 연습이 저장됐다는 걸 화면에서 바로 확인할 수 있게 한다.
+            // selectedFiles를 먼저 비워야 한다 — 그대로 두면 포커스 모드 동안 언마운트됐던
+            // FileSelector가 아직 트리도 못 불러온 시점에 "예전 selectedFiles(=방금 연습한
+            // 그 파일)가 이미 target과 같다"는 착시로 아래 복원 effect가 restoreRequest를
+            // 즉시 지워버려서, 정작 체크박스에는 복원이 반영되지 않는 문제가 있었다.
+            if (activeFilePaths.length > 0) {
+              setSelectedFiles([]);
+              setRestoreRequest({ paths: activeFilePaths, mode, autoStart: false });
+            }
+          }}
           label="연습 종료하기"
           extraAction={!finished && queue.length > 1 ? { label: "단어 순서 섞기", onClick: shuffleQueue } : undefined}
         />
@@ -464,7 +479,9 @@ function PracticePageInner() {
         ready={ready}
         part="practice"
         selectedFiles={selectedFiles}
-        onRestore={(paths, mode) => setRestoreRequest({ paths, mode: isStudyMode(mode) ? mode : "random" })}
+        onRestore={(paths, mode) =>
+          setRestoreRequest({ paths, mode: isStudyMode(mode) ? mode : "random", autoStart: true })
+        }
       />
     </div>
   );
