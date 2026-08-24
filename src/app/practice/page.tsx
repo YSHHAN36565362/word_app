@@ -266,10 +266,23 @@ function PracticePageInner() {
       "2": () => { if (showAnswer) score(40); },
       "3": () => { if (showAnswer) score(60); },
       "4": () => { if (showAnswer) score(100); },
-      ArrowLeft: () => { if (showAnswer) score(0); },
-      ArrowDown: () => { if (showAnswer) score(40); },
-      ArrowUp: () => { if (showAnswer) score(60); },
-      ArrowRight: () => { if (showAnswer) score(100); },
+      // 방향키: 위=완벽함, 아래=모름, 좌우=조금 앎(둘 다 인정) — 헷갈림은 방향키에
+      // 배정하지 않고 숫자키(2)로만 채점한다.
+      ArrowUp: () => { if (showAnswer) score(100); },
+      ArrowDown: () => { if (showAnswer) score(0); },
+      ArrowLeft: () => { if (showAnswer) score(60); },
+      ArrowRight: () => { if (showAnswer) score(60); },
+      // WASD도 방향키와 같은 배치(W=위, S=아래, A/D=좌우).
+      w: () => { if (showAnswer) score(100); },
+      s: () => { if (showAnswer) score(0); },
+      a: () => { if (showAnswer) score(60); },
+      d: () => { if (showAnswer) score(60); },
+      // 오른쪽 숫자 키패드(8/2/4/6)도 같은 배치 — code로 매칭해서 NumLock 상태와
+      // 무관하게 항상 동작하고, 최상단 숫자키(1~4) 배정과도 충돌하지 않는다.
+      Numpad8: () => { if (showAnswer) score(100); },
+      Numpad2: () => { if (showAnswer) score(0); },
+      Numpad4: () => { if (showAnswer) score(60); },
+      Numpad6: () => { if (showAnswer) score(60); },
     },
     focus && !finished && current !== null
   );
@@ -308,19 +321,19 @@ function PracticePageInner() {
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => score(100)} className="btn-3d btn-accent">
                   완벽함 (100)
-                  <KeyBadge>4 / →</KeyBadge>
+                  <KeyBadge>4 · ↑ · W · Num8</KeyBadge>
                 </button>
                 <button onClick={() => score(60)} className="btn-3d btn-blue">
                   조금 앎 (60)
-                  <KeyBadge>3 / ↑</KeyBadge>
+                  <KeyBadge>3 · ← → · A D · Num4 · 6</KeyBadge>
                 </button>
                 <button onClick={() => score(40)} className="btn-3d btn-amber">
                   헷갈림 (40)
-                  <KeyBadge>2 / ↓</KeyBadge>
+                  <KeyBadge>2</KeyBadge>
                 </button>
                 <button onClick={() => score(0)} className="btn-3d btn-red">
                   모름 (0)
-                  <KeyBadge>1 / ←</KeyBadge>
+                  <KeyBadge>1 · ↓ · S · Num2</KeyBadge>
                 </button>
               </div>
             )
@@ -398,7 +411,8 @@ function PracticePageInner() {
         subtitle="망각 곡선 큐 적용. 4단계로 스스로 채점하면 모르는 단어일수록 더 빨리 다시 만납니다."
       />
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-        단축키: Space/Enter=정답 확인 · 1~4 또는 방향키(←↓↑→)=모름/헷갈림/조금앎/완벽함
+        단축키: Space/Enter=정답 확인 · 1~4=모름·헷갈림·조금앎·완벽함 · ↑/W/Num8=완벽함 ·
+        ↓/S/Num2=모름 · ←→/AD/Num4·6=조금앎
       </p>
 
       {ready && !userId && (
