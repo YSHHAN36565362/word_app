@@ -11,6 +11,8 @@ import KeyBadge from "@/components/KeyBadge";
 import Mascot, { MascotState } from "@/components/Mascot";
 import Spinner from "@/components/Spinner";
 import PageHeader from "@/components/PageHeader";
+import Confetti from "@/components/Confetti";
+import FeedbackFlash from "@/components/FeedbackFlash";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
@@ -47,6 +49,8 @@ export default function ExamPage() {
   // FlashCard의 key. score(연습)와 같은 이유 — 뒤집기 상태 리셋과 다음 단어 교체가
   // 한 렌더에서 같이 일어나면 뒤집는 애니메이션 도중 다음 단어의 정답이 잠깐 보인다.
   const [turnId, setTurnId] = useState(0);
+  const [flashKey, setFlashKey] = useState(0);
+  const [flashColor, setFlashColor] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -172,6 +176,8 @@ export default function ExamPage() {
     setDisplaySide(nextSide);
     setCurrentNumber(nextNumber);
     setTurnId((t) => t + 1);
+    setFlashColor(correct ? "var(--accent)" : "var(--red)");
+    setFlashKey((k) => k + 1);
 
     persist({ queue: nextQueue, current: nextCurrent, total, num: nextNumber, correct: nextCorrect, wrong: nextWrong, side: nextSide, m: mode, labels: filesLabel });
     if (userId) saveWordMastery(userId, current, correct ? 100 : 0);
@@ -236,18 +242,21 @@ export default function ExamPage() {
     return (
       <FocusScreen
         top={
-          !finished && current ? (
-            <>
-              <ProgressBar ratio={(currentNumber - 1) / Math.max(1, total)} />
-              <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-                <span>진행 {currentNumber} / {total}</span>
-                <span>맞음 {correctCount} · 틀림 {wrongCount}</span>
-              </div>
-              <div className="mt-4 flex justify-center">
-                <Mascot state={mascotState} reactionKey={turnId} />
-              </div>
-            </>
-          ) : null
+          <>
+            <FeedbackFlash flashKey={flashKey} color={flashColor} />
+            {!finished && current && (
+              <>
+                <ProgressBar ratio={(currentNumber - 1) / Math.max(1, total)} />
+                <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+                  <span>진행 {currentNumber} / {total}</span>
+                  <span>맞음 {correctCount} · 틀림 {wrongCount}</span>
+                </div>
+                <div className="mt-4 flex justify-center">
+                  <Mascot state={mascotState} reactionKey={turnId} />
+                </div>
+              </>
+            )}
+          </>
         }
         actions={
           !finished && current ? (
@@ -298,7 +307,8 @@ export default function ExamPage() {
             />
           </div>
         ) : (
-          <div className="study-card mt-8 p-8 text-center">
+          <div className="study-card relative mt-8 p-8 text-center">
+            {accuracy >= 70 && <Confetti />}
             <div className="flex justify-center mb-3">
               <Mascot state={accuracy >= 70 ? "correct" : "wrong"} />
             </div>

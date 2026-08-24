@@ -13,6 +13,8 @@ import Mascot, { MascotState } from "@/components/Mascot";
 import Spinner from "@/components/Spinner";
 import SessionInfoPanel from "@/components/SessionInfoPanel";
 import PageHeader from "@/components/PageHeader";
+import Confetti from "@/components/Confetti";
+import FeedbackFlash from "@/components/FeedbackFlash";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
@@ -74,6 +76,8 @@ function PracticePageInner() {
   // 새로 마운트하면 전환 애니메이션 없이 바로 앞면(새 단어)으로 나타나 이 문제가 없다.
   const [turnId, setTurnId] = useState(0);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [flashKey, setFlashKey] = useState(0);
+  const [flashColor, setFlashColor] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -219,6 +223,8 @@ function PracticePageInner() {
     setShowAnswer(false);
     setShowHint(false);
     setTurnId((t) => t + 1);
+    setFlashColor(level >= 60 ? "var(--accent)" : "var(--red)");
+    setFlashKey((k) => k + 1);
 
     persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, labels: filesLabel, paths: activeFilePaths });
     if (userId) saveWordMastery(userId, current, level);
@@ -260,18 +266,21 @@ function PracticePageInner() {
     return (
       <FocusScreen
         top={
-          !finished && current ? (
-            <>
-              <ProgressBar ratio={doneCount / Math.max(1, total)} />
-              <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-                <span>완료 {doneCount} / {total}</span>
-                <span>남은 큐 {queue.length + 1}개</span>
-              </div>
-              <div className="mt-4 flex justify-center">
-                <Mascot state={mascotState} reactionKey={turnId} />
-              </div>
-            </>
-          ) : null
+          <>
+            <FeedbackFlash flashKey={flashKey} color={flashColor} />
+            {!finished && current && (
+              <>
+                <ProgressBar ratio={doneCount / Math.max(1, total)} />
+                <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+                  <span>완료 {doneCount} / {total}</span>
+                  <span>남은 큐 {queue.length + 1}개</span>
+                </div>
+                <div className="mt-4 flex justify-center">
+                  <Mascot state={mascotState} reactionKey={turnId} />
+                </div>
+              </>
+            )}
+          </>
         }
         actions={
           !finished && current ? (
@@ -335,7 +344,8 @@ function PracticePageInner() {
             />
           </div>
         ) : (
-          <div className="study-card mt-10 p-8 text-center">
+          <div className="study-card relative mt-10 p-8 text-center">
+            <Confetti />
             <div className="flex justify-center mb-3">
               <Mascot state="correct" />
             </div>

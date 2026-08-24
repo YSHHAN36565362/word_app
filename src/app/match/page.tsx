@@ -7,6 +7,7 @@ import PageHeader from "@/components/PageHeader";
 import Spinner from "@/components/Spinner";
 import ExitFocusButton from "@/components/ExitFocusButton";
 import FocusScreen from "@/components/FocusScreen";
+import Confetti from "@/components/Confetti";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
@@ -137,7 +138,8 @@ export default function MatchPage() {
         }
       >
         {finished ? (
-          <div className="study-card mt-6 p-8 text-center">
+          <div className="study-card relative mt-6 p-8 text-center">
+            <Confetti />
             <div className="text-lg font-bold" style={{ color: "var(--accent)" }}>
               완료! {formatMs(elapsedMs)}
             </div>
@@ -166,9 +168,10 @@ export default function MatchPage() {
                   key={tile.id}
                   onClick={() => pickTile(tile)}
                   disabled={isMatched}
-                  className="study-card px-3 py-4 text-sm font-bold text-center break-keep"
+                  className="study-card px-3 py-4 text-sm font-bold text-center break-keep transition-all duration-200"
                   style={{
                     opacity: isMatched ? 0.15 : 1,
+                    transform: isMatched ? "scale(0.9)" : isSelected ? "scale(1.04)" : "scale(1)",
                     pointerEvents: isMatched ? "none" : "auto",
                     background: isWrong || isSelected ? "var(--hint-bg)" : "var(--card)",
                     borderColor: isWrong ? "var(--red)" : isSelected ? "var(--blue)" : "var(--card-border)",

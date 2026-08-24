@@ -10,6 +10,7 @@ import KeyBadge from "@/components/KeyBadge";
 import Spinner from "@/components/Spinner";
 import SessionInfoPanel from "@/components/SessionInfoPanel";
 import PageHeader from "@/components/PageHeader";
+import Confetti from "@/components/Confetti";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
@@ -218,7 +219,8 @@ export default function StudyPage() {
             )}
           </div>
         ) : (
-          <div className="study-card mt-10 p-8 text-center">
+          <div className="study-card relative mt-10 p-8 text-center">
+            {done && <Confetti />}
             <div className="text-lg font-bold" style={{ color: "var(--accent)" }}>
               모든 단어 학습을 완료했습니다.
             </div>
