@@ -20,7 +20,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, shuffle, wordKey } from "@/lib/queue";
-import { appendStudyStat, deleteProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
+import { appendStudyStat, deleteProgress, loadProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
 import { loadAllMastery, loadMasteredWords, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, loadFavorites, removeFavorite } from "@/lib/favorites";
@@ -60,6 +60,11 @@ function PracticePageInner() {
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
   const [starting, setStarting] = useState(false);
+  // 완전히 끝내지 않고 나간 큐/완료 개수를 그대로 이어서 볼 수 있게 저장해둔다. 이게
+  // 없으면 "이 학습 다시 하기"가 큐를 처음부터 다시 섞고 완료 개수를 0부터 시작해서,
+  // 예전에 쌓아둔 완료 개수가 사라진 것처럼 보이는 문제가 있었다 — 시험 파트는 이미
+  // 이 방식(saved/resume)으로 정확히 이어하기가 되고 있어서 그 패턴을 그대로 따른다.
+  const [saved, setSaved] = useState<PracticeProgress | null>(null);
 
   const [queue, setQueue] = useState<WordEntry[]>([]);
   const [current, setCurrent] = useState<WordEntry | null>(null);
@@ -86,6 +91,13 @@ function PracticePageInner() {
   useEffect(() => {
     if (!ready || !userId) return;
     loadFavoriteKeys(userId).then(setFavorites);
+  }, [ready, userId]);
+
+  useEffect(() => {
+    if (!ready || !userId) return;
+    loadProgress<PracticeProgress>(userId, "practice").then((p) => {
+      if (p && (p.queue?.length || p.currentWord)) setSaved(p);
+    });
   }, [ready, userId]);
 
   function toggleFavorite(word: WordEntry) {
@@ -155,6 +167,26 @@ function PracticePageInner() {
     const [list, mastery] = await Promise.all([fetchWords(paths), userId ? loadAllMastery(userId) : Promise.resolve(new Map<string, number>())]);
     startWithList(list, mastery, selectedMode, labels, paths);
     setStarting(false);
+  }
+
+  // 저장된 큐를 그대로(다시 섞지 않고, 완료 개수도 그대로) 복원한다 — begin()과 달리
+  // 단어 목록을 새로 받아오지 않는다.
+  function resume() {
+    if (!saved) return;
+    setMode(saved.mode);
+    setQueue(saved.queue);
+    setCurrent(saved.currentWord);
+    setTotal(saved.totalCount);
+    setDoneCount(saved.doneCount);
+    setDisplaySide(saved.displaySide);
+    setShowAnswer(false);
+    setShowHint(false);
+    setResultSaved(false);
+    setMascotState("idle");
+    setFilesLabel(saved.filesLabel);
+    setActiveFilePaths(saved.filePaths);
+    setTurnId((t) => t + 1);
+    setFocus(true);
   }
 
   // 복원 요청이 들어오면, FileSelector가 그 파일들을 실제 체크박스 선택(selectedFiles)으로
@@ -255,6 +287,7 @@ function PracticePageInner() {
       setResultSaved(true);
       appendStudyStat(userId, "practice", total, total);
       deleteProgress(userId, "practice");
+      setSaved(null);
     }
   }, [finished, userId, resultSaved, total]);
 
@@ -266,23 +299,22 @@ function PracticePageInner() {
       "2": () => { if (showAnswer) score(40); },
       "3": () => { if (showAnswer) score(60); },
       "4": () => { if (showAnswer) score(100); },
-      // 방향키: 위=완벽함, 아래=모름, 좌우=조금 앎(둘 다 인정) — 헷갈림은 방향키에
-      // 배정하지 않고 숫자키(2)로만 채점한다.
+      // 방향키: 위=완벽함, 아래=모름, 왼쪽=조금 앎, 오른쪽=헷갈림.
       ArrowUp: () => { if (showAnswer) score(100); },
       ArrowDown: () => { if (showAnswer) score(0); },
       ArrowLeft: () => { if (showAnswer) score(60); },
-      ArrowRight: () => { if (showAnswer) score(60); },
-      // WASD도 방향키와 같은 배치(W=위, S=아래, A/D=좌우).
+      ArrowRight: () => { if (showAnswer) score(40); },
+      // WASD도 방향키와 같은 배치(W=위, S=아래, A=왼쪽, D=오른쪽).
       w: () => { if (showAnswer) score(100); },
       s: () => { if (showAnswer) score(0); },
       a: () => { if (showAnswer) score(60); },
-      d: () => { if (showAnswer) score(60); },
+      d: () => { if (showAnswer) score(40); },
       // 오른쪽 숫자 키패드(8/2/4/6)도 같은 배치 — code로 매칭해서 NumLock 상태와
       // 무관하게 항상 동작하고, 최상단 숫자키(1~4) 배정과도 충돌하지 않는다.
       Numpad8: () => { if (showAnswer) score(100); },
       Numpad2: () => { if (showAnswer) score(0); },
       Numpad4: () => { if (showAnswer) score(60); },
-      Numpad6: () => { if (showAnswer) score(60); },
+      Numpad6: () => { if (showAnswer) score(40); },
     },
     focus && !finished && current !== null
   );
@@ -325,11 +357,11 @@ function PracticePageInner() {
                 </button>
                 <button onClick={() => score(60)} className="btn-3d btn-blue">
                   조금 앎 (60)
-                  <KeyBadge>3 · ← → · A D · Num4 · 6</KeyBadge>
+                  <KeyBadge>3 · ← · A · Num4</KeyBadge>
                 </button>
                 <button onClick={() => score(40)} className="btn-3d btn-amber">
                   헷갈림 (40)
-                  <KeyBadge>2</KeyBadge>
+                  <KeyBadge>2 · → · D · Num6</KeyBadge>
                 </button>
                 <button onClick={() => score(0)} className="btn-3d btn-red">
                   모름 (0)
@@ -393,6 +425,20 @@ function PracticePageInner() {
             if (activeFilePaths.length > 0) {
               setSelectedFiles([]);
               setRestoreRequest({ paths: activeFilePaths, mode, autoStart: false });
+              // 아직 다 못 끝낸 채로 나가는 거면, 방금까지의 큐/완료 개수를 그대로
+              // "이어서 연습하기" 카드에 반영해서 다음에 정확히 이어할 수 있게 한다.
+              if (!finished) {
+                setSaved({
+                  filesLabel,
+                  filePaths: activeFilePaths,
+                  mode,
+                  queue,
+                  currentWord: current,
+                  displaySide,
+                  totalCount: total,
+                  doneCount,
+                });
+              }
             }
           }}
           label="연습 종료하기"
@@ -412,7 +458,7 @@ function PracticePageInner() {
       />
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
         단축키: Space/Enter=정답 확인 · 1~4=모름·헷갈림·조금앎·완벽함 · ↑/W/Num8=완벽함 ·
-        ↓/S/Num2=모름 · ←→/AD/Num4·6=조금앎
+        ↓/S/Num2=모름 · ←/A/Num4=조금앎 · →/D/Num6=헷갈림
       </p>
 
       {ready && !userId && (
@@ -421,6 +467,17 @@ function PracticePageInner() {
             내 번호
           </Link>
           를 설정하면 연습 진행 상황이 기기 간에 저장됩니다.
+        </div>
+      )}
+
+      {saved && (
+        <div className="mt-4 study-card p-4">
+          <div className="text-sm">
+            저장된 연습 진행이 있습니다: {fileSummaryOf(saved.filesLabel)} · 완료 {saved.doneCount} / {saved.totalCount}
+          </div>
+          <button onClick={resume} className="btn-3d btn-blue mt-3 w-full">
+            이어서 연습하기
+          </button>
         </div>
       )}
 

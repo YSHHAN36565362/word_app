@@ -16,7 +16,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { shuffle, wordKey } from "@/lib/queue";
-import { deleteProgress, saveProgress } from "@/lib/progress";
+import { deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, removeFavorite } from "@/lib/favorites";
 import { FileRef, StudyProgress, WordEntry } from "@/lib/types";
@@ -34,6 +34,10 @@ export default function StudyPage() {
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
   const [starting, setStarting] = useState(false);
+  // 끝까지 안 보고 나간 단어 목록/위치를 그대로 이어볼 수 있게 저장해둔다. 이게 없으면
+  // "이 학습 다시 하기"가 단어 목록을 새로 불러와 처음(0)부터 다시 시작해서, 예전에
+  // 어디까지 봤는지가 사라진 것처럼 보이는 문제가 있었다.
+  const [saved, setSaved] = useState<StudyProgress | null>(null);
 
   const [words, setWords] = useState<WordEntry[]>([]);
   const [index, setIndex] = useState(0);
@@ -45,6 +49,13 @@ export default function StudyPage() {
   useEffect(() => {
     if (!ready || !userId) return;
     loadFavoriteKeys(userId).then(setFavorites);
+  }, [ready, userId]);
+
+  useEffect(() => {
+    if (!ready || !userId) return;
+    loadProgress<StudyProgress>(userId, "study").then((p) => {
+      if (p && p.words?.length) setSaved(p);
+    });
   }, [ready, userId]);
 
   async function begin() {
@@ -71,6 +82,18 @@ export default function StudyPage() {
       } as StudyProgress);
       upsertLearningLog(userId, "study", paths, fileSummaryOf(labels), pool.length, 0);
     }
+  }
+
+  // 저장된 단어 목록/위치를 그대로(다시 섞지 않고) 복원한다 — begin()과 달리 단어
+  // 목록을 새로 받아오지 않는다.
+  function resume() {
+    if (!saved) return;
+    setWords(saved.words);
+    setIndex(saved.studyIndex);
+    setShowHint(false);
+    setActiveFilePaths(saved.filePaths);
+    setActiveFileLabels(saved.filesLabel);
+    setFocus(true);
   }
 
   // 복원 요청이 들어오면, FileSelector가 그 파일들을 실제 체크박스 선택(selectedFiles)으로
@@ -155,6 +178,8 @@ export default function StudyPage() {
   useEffect(() => {
     if (focus && done && userId) {
       deleteProgress(userId, "study");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSaved(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
@@ -247,6 +272,16 @@ export default function StudyPage() {
             if (activeFilePaths.length > 0) {
               setSelectedFiles([]);
               setRestoreRequest({ paths: activeFilePaths, autoStart: false });
+              // 아직 다 못 본 채로 나가는 거면, 방금까지 본 위치를 그대로 "이어서
+              // 학습하기" 카드에 반영해서 다음에 정확히 이어볼 수 있게 한다.
+              if (!done) {
+                setSaved({
+                  words,
+                  filesLabel: activeFileLabels,
+                  filePaths: activeFilePaths,
+                  studyIndex: index,
+                });
+              }
             }
           }}
           label="학습 종료하기"
@@ -274,6 +309,17 @@ export default function StudyPage() {
             내 번호
           </Link>
           를 설정하면 학습 진행 상황이 기기 간에 저장됩니다.
+        </div>
+      )}
+
+      {saved && (
+        <div className="mt-4 study-card p-4">
+          <div className="text-sm">
+            저장된 학습 진행이 있습니다: {fileSummaryOf(saved.filesLabel)} · {saved.studyIndex} / {saved.words.length}
+          </div>
+          <button onClick={resume} className="btn-3d btn-blue mt-3 w-full">
+            이어서 학습하기
+          </button>
         </div>
       )}
 

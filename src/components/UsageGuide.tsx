@@ -173,7 +173,7 @@ const FEATURE_ITEMS: GuideItem[] = [
         <span className="font-bold">연습</span>
         <span>
           Space/Enter 정답 확인, 1~4 모름·헷갈림·조금앎·완벽함
-          <br />↑/W/숫자패드8 완벽함, ↓/S/숫자패드2 모름, ←→/AD/숫자패드4·6 조금앎
+          <br />↑/W/숫자패드8 완벽함, ↓/S/숫자패드2 모름, ←/A/숫자패드4 조금앎, →/D/숫자패드6 헷갈림
         </span>
         <span className="font-bold">시험</span>
         <span>Space/Enter 정답 확인, ← 틀림, → 맞음</span>
