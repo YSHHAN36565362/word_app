@@ -55,12 +55,53 @@ export async function saveWordMastery(userId: string, word: WordEntry, score: 0 
     .then(async () => {
       const supabase = await getSupabaseAsync();
       if (!supabase) return;
-      await supabase
-        .from("word_mastery")
-        .upsert({ user_id: userId, word_key: wordKey(word), score, updated_at: new Date().toISOString() }, { onConflict: "user_id,word_key" });
+      // word/meaning/hint도 함께 저장해둔다 — "복습" 목록에서 점수 이력만이 아니라
+      // 실제 단어 내용을 다시 보여주려면 원문이 필요하기 때문이다.
+      await supabase.from("word_mastery").upsert(
+        {
+          user_id: userId,
+          word_key: wordKey(word),
+          score,
+          word: word.word,
+          meaning: word.meaning,
+          hint: word.hint,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,word_key" }
+      );
     });
   saveChains.set(chainKey, run);
   return run;
+}
+
+/**
+ * 완벽함(100)·조금 앎(60)으로 채점해 "잘 아는 단어"로 분류된 것들을 최근 순으로
+ * 돌려준다. 설정의 "복습" 화면에서 사용한다. word_mastery에 원문(word/meaning/hint)이
+ * 저장되기 전(이 기능 추가 이전)에 채점된 항목은 원문이 없어 목록에서 제외된다.
+ */
+export async function loadMasteredWords(userId: string, minScore = 60): Promise<WordEntry[]> {
+  if (!userId) return [];
+  const supabase = await getSupabaseAsync();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("word_mastery")
+    .select("word, meaning, hint")
+    .eq("user_id", userId)
+    .gte("score", minScore)
+    .not("word", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(500);
+  if (error || !data) return [];
+  return data as WordEntry[];
+}
+
+/** 단어의 숙련도 기록을 지운다 — 다음 연습부터는 "아직 안 본 단어"처럼 다시 우선 출제된다. */
+export async function resetWordMastery(userId: string, word: WordEntry): Promise<void> {
+  if (!userId) return;
+  cache.delete(userId);
+  const supabase = await getSupabaseAsync();
+  if (!supabase) return;
+  await supabase.from("word_mastery").delete().eq("user_id", userId).eq("word_key", wordKey(word));
 }
 
 /**

@@ -21,13 +21,14 @@ import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, shuffle, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
-import { loadAllMastery, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
+import { loadAllMastery, loadMasteredWords, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, loadFavorites, removeFavorite } from "@/lib/favorites";
 import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
 
 const WRONG_NOTES_PATH_KEY = "__wrong_notes__";
 const FAVORITES_PATH_KEY = "__favorites__";
+const REVIEW_PATH_KEY = "__review__";
 
 interface RestoreRequest {
   paths: string[];
@@ -52,6 +53,7 @@ function PracticePageInner() {
   const searchParams = useSearchParams();
   const fromWrongNotes = searchParams.get("from") === "wrongnotes";
   const fromFavorites = searchParams.get("from") === "favorites";
+  const fromReview = searchParams.get("from") === "review";
 
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
@@ -186,6 +188,14 @@ function PracticePageInner() {
     setStarting(false);
   }
 
+  async function beginFromReview() {
+    if (!userId) return;
+    setStarting(true);
+    const [list, mastery] = await Promise.all([loadMasteredWords(userId), loadAllMastery(userId)]);
+    startWithList(list, mastery, "random", ["복습"], [REVIEW_PATH_KEY]);
+    setStarting(false);
+  }
+
   // 아직 채점 안 한 대기열의 순서만 다시 섞는다(현재 보여주고 있는 단어는 그대로 둔다).
   // 같은 조합을 여러 번 반복하다 보면 내용이 아니라 "다음에 뭐가 나올지" 순서로
   // 외워버릴 수 있어서, 진행 중에도 원하면 순서를 바꿀 수 있게 한다.
@@ -206,8 +216,9 @@ function PracticePageInner() {
     if (!current) return;
     const nextQueue = [...queue];
     let nextDone = doneCount;
-    if (level !== 100) {
-      const pos = requeuePosition(nextQueue.length, level);
+    // 완벽함(100)·조금 앎(60)은 큐에서 빼고 완료로 친다. 헷갈림(40)·모름(0)만 다시 꽂는다.
+    if (level < 60) {
+      const pos = requeuePosition(nextQueue.length, level as 40 | 0);
       nextQueue.splice(pos, 0, current);
     } else {
       nextDone += 1;
@@ -411,6 +422,22 @@ function PracticePageInner() {
               </>
             ) : (
               "즐겨찾기로 연습 시작"
+            )}
+          </button>
+        </div>
+      )}
+
+      {fromReview && userId && (
+        <div className="mt-4 study-card p-4">
+          <div className="text-sm">완벽함/조금 앎으로 채점했던 단어를 다시 복습합니다.</div>
+          <button onClick={beginFromReview} disabled={starting} className="btn-3d btn-blue mt-3 w-full">
+            {starting ? (
+              <>
+                <Spinner size={16} className="mr-2" />
+                불러오는 중...
+              </>
+            ) : (
+              "복습 시작"
             )}
           </button>
         </div>

@@ -41,6 +41,13 @@ create table if not exists word_mastery (
   primary key (user_id, word_key)
 );
 
+-- 이미 만들어진 테이블에도 원문 컬럼을 추가한다(기존 배포에 대한 마이그레이션).
+-- "복습" 화면에서 완벽함/조금 앎으로 채점한 단어를 다시 보여주려면 word_key(해시)만으로는
+-- 부족하고 실제 단어/뜻/힌트 원문이 필요하다.
+alter table word_mastery add column if not exists word text;
+alter table word_mastery add column if not exists meaning text;
+alter table word_mastery add column if not exists hint text;
+
 create index if not exists word_mastery_user_id_idx on word_mastery (user_id);
 
 -- 파일 조합별 진행 기록 요약. progress 테이블은 "진행 중인 세션 딱 1개"만 담고 완료하면

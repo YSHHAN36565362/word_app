@@ -68,6 +68,17 @@ export default function SettingsPage() {
         <span style={{ color: "var(--text-muted)" }}>›</span>
       </Link>
 
+      <Link
+        href="/more/review"
+        className="mt-2 flex items-center justify-between study-card px-4 py-3 text-sm"
+        style={{ color: "var(--text)" }}
+      >
+        <span>
+          완벽함·조금 앎으로 채점한 단어를 <span className="font-bold">복습</span>에서 다시 볼 수 있어요.
+        </span>
+        <span style={{ color: "var(--text-muted)" }}>›</span>
+      </Link>
+
       <div className="mt-4 study-card p-4">
         <div className="text-sm font-bold">화면 테마</div>
         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
