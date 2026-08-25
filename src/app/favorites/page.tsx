@@ -7,6 +7,7 @@ import { loadFavorites, removeFavorite } from "@/lib/favorites";
 import { wordKey } from "@/lib/queue";
 import { WordEntry } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
+import HintText from "@/components/HintText";
 
 export default function FavoritesPage() {
   const { userId, ready } = useUserId();
@@ -107,7 +108,7 @@ export default function FavoritesPage() {
                         className="hint-reveal mt-2 rounded-xl px-3 py-2 text-xs whitespace-pre-line"
                         style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
                       >
-                        {w.hint}
+                        <HintText text={w.hint} />
                       </div>
                     )}
                   </div>

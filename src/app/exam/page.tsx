@@ -13,6 +13,7 @@ import Spinner from "@/components/Spinner";
 import PageHeader from "@/components/PageHeader";
 import Confetti from "@/components/Confetti";
 import FeedbackFlash from "@/components/FeedbackFlash";
+import HintText from "@/components/HintText";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
@@ -307,7 +308,7 @@ export default function ExamPage() {
                       className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
                       style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
                     >
-                      {current.hint}
+                      <HintText text={current.hint} />
                     </div>
                   )}
                 </div>

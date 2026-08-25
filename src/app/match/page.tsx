@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import FileSelector from "@/components/FileSelector";
 import PageHeader from "@/components/PageHeader";
 import Spinner from "@/components/Spinner";
 import ExitFocusButton from "@/components/ExitFocusButton";
 import FocusScreen from "@/components/FocusScreen";
+import ProgressBar from "@/components/ProgressBar";
 import Confetti from "@/components/Confetti";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useUserId } from "@/hooks/useUserId";
@@ -48,6 +50,8 @@ export default function MatchPage() {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [wrongPair, setWrongPair] = useState<string[]>([]);
+  // 정답으로 확정되기 직전, 사라지기 전에 초록색으로 잠깐 펄스를 보여줄 타일 id들.
+  const [correctPair, setCorrectPair] = useState<string[]>([]);
   const [matchedPairIds, setMatchedPairIds] = useState<Set<number>>(new Set());
   const [startedAt, setStartedAt] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -78,6 +82,7 @@ export default function MatchPage() {
     setMatchedPairIds(new Set());
     setSelected([]);
     setWrongPair([]);
+    setCorrectPair([]);
     setFinished(false);
     setNewRecord(false);
     setFileKey(fileKeyOf(paths));
@@ -103,6 +108,8 @@ export default function MatchPage() {
     const b = tiles.find((t) => t.id === bId)!;
 
     if (a.pairId === b.pairId && a.kind !== b.kind) {
+      // 정답: 초록 펄스를 잠깐 보여준 뒤 그리드에서 빠지며 사라지는 애니메이션을 재생한다.
+      setCorrectPair(nextSelected);
       setTimeout(() => {
         setMatchedPairIds((prev) => {
           const next = new Set(prev).add(a.pairId);
@@ -115,8 +122,10 @@ export default function MatchPage() {
           return next;
         });
         setSelected([]);
-      }, 220);
+        setCorrectPair([]);
+      }, 320);
     } else {
+      // 오답: 정답과는 다르게 자리에 그대로 남아 좌우로 흔들리며 빨갛게 표시된다(사라지지 않음).
       setWrongPair(nextSelected);
       setTimeout(() => {
         setWrongPair([]);
@@ -126,15 +135,20 @@ export default function MatchPage() {
   }
 
   if (focus) {
+    const visibleTiles = tiles.filter((t) => !matchedPairIds.has(t.pairId));
+
     return (
       <FocusScreen
         top={
-          <div className="flex items-center justify-between text-sm font-bold" style={{ color: "var(--text-muted)" }}>
-            <span>맞춘 짝 {matchedPairIds.size} / {pairTotal}</span>
-            <span className="tabular-nums" style={{ color: "var(--text)" }}>
-              {formatMs(elapsedMs)}
-            </span>
-          </div>
+          <>
+            <ProgressBar ratio={pairTotal > 0 ? matchedPairIds.size / pairTotal : 0} />
+            <div className="mt-2 flex items-center justify-between text-sm font-bold" style={{ color: "var(--text-muted)" }}>
+              <span>맞춘 짝 {matchedPairIds.size} / {pairTotal}</span>
+              <span className="tabular-nums" style={{ color: "var(--text)" }}>
+                {formatMs(elapsedMs)}
+              </span>
+            </div>
+          </>
         }
       >
         {finished ? (
@@ -158,30 +172,41 @@ export default function MatchPage() {
             </button>
           </div>
         ) : (
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {tiles.map((tile) => {
-              const isMatched = matchedPairIds.has(tile.pairId);
-              const isSelected = selected.includes(tile.id);
-              const isWrong = wrongPair.includes(tile.id);
-              return (
-                <button
-                  key={tile.id}
-                  onClick={() => pickTile(tile)}
-                  disabled={isMatched}
-                  className="study-card px-3 py-4 text-sm font-bold text-center break-keep transition-all duration-200"
-                  style={{
-                    opacity: isMatched ? 0.15 : 1,
-                    transform: isMatched ? "scale(0.9)" : isSelected ? "scale(1.04)" : "scale(1)",
-                    pointerEvents: isMatched ? "none" : "auto",
-                    background: isWrong || isSelected ? "var(--hint-bg)" : "var(--card)",
-                    borderColor: isWrong ? "var(--red)" : isSelected ? "var(--blue)" : "var(--card-border)",
-                    borderWidth: isWrong || isSelected ? 2 : 1,
-                  }}
-                >
-                  {tile.text}
-                </button>
-              );
-            })}
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <AnimatePresence>
+              {visibleTiles.map((tile) => {
+                const isSelected = selected.includes(tile.id);
+                const isWrong = wrongPair.includes(tile.id);
+                const isCorrect = correctPair.includes(tile.id);
+                return (
+                  <motion.button
+                    key={tile.id}
+                    layout
+                    onClick={() => pickTile(tile)}
+                    className="match-tile px-3 py-4 text-sm font-extrabold text-center break-keep"
+                    data-state={isCorrect ? "correct" : isWrong ? "wrong" : isSelected ? "selected" : "idle"}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={
+                      isWrong
+                        ? { opacity: 1, scale: 1, x: [0, -9, 9, -7, 7, -4, 4, 0] }
+                        : isCorrect
+                          ? { opacity: 1, scale: [1, 1.16, 1.02] }
+                          : { opacity: 1, scale: 1, x: 0 }
+                    }
+                    exit={{ opacity: 0, scale: 0.35, transition: { duration: 0.28, ease: "easeIn" } }}
+                    transition={
+                      isWrong
+                        ? { duration: 0.42, ease: "easeInOut" }
+                        : isCorrect
+                          ? { duration: 0.32, ease: "easeOut" }
+                          : { type: "spring", stiffness: 500, damping: 30 }
+                    }
+                  >
+                    {tile.text}
+                  </motion.button>
+                );
+              })}
+            </AnimatePresence>
           </div>
         )}
         <ExitFocusButton onExit={() => {}} label="매칭 게임 종료하기" />

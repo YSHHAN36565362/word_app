@@ -151,6 +151,38 @@ body {
   box-shadow: 0 1px 0 #6d3fd6;
 }
 
+/* ---------- 매칭 게임 타일 — btn-3d와 같은 "듀오링고식 3D 눌림" 두께감을 준다 ---------- */
+.match-tile {
+  border-radius: 18px;
+  border: 2px solid var(--card-border);
+  background: var(--card);
+  box-shadow: 0 4px 0 var(--card-border);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.match-tile:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--card-border);
+}
+.match-tile[data-state="selected"] {
+  border-color: var(--blue);
+  background: var(--hint-bg);
+  box-shadow: 0 4px 0 var(--blue-dark);
+}
+.match-tile[data-state="correct"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 4px 0 var(--accent-dark);
+  color: var(--accent-dark);
+}
+.match-tile[data-state="wrong"] {
+  border-color: var(--red);
+  background: var(--hint-bg);
+  box-shadow: 0 4px 0 var(--red-dark);
+  color: var(--red);
+}
+
 /* ---------- 카드 ---------- */
 .study-card {
   background: var(--card);

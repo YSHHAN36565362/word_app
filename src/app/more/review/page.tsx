@@ -7,6 +7,7 @@ import { loadDueReviewWords, loadMasteredWords, resetWordMastery } from "@/lib/m
 import { wordKey } from "@/lib/queue";
 import { WordEntry } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
+import HintText from "@/components/HintText";
 
 export default function ReviewPage() {
   const { userId, ready } = useUserId();
@@ -134,7 +135,7 @@ export default function ReviewPage() {
                         className="hint-reveal mt-2 rounded-xl px-3 py-2 text-xs whitespace-pre-line"
                         style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
                       >
-                        {w.hint}
+                        <HintText text={w.hint} />
                       </div>
                     )}
                   </div>

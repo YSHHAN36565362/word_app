@@ -6,6 +6,7 @@ import { useUserId } from "@/hooks/useUserId";
 import { loadWrongNotes, removeWordFromWrongNotes, saveWrongNotes } from "@/lib/progress";
 import { WordEntry } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
+import HintText from "@/components/HintText";
 
 export default function WrongNotesPage() {
   const { userId, ready } = useUserId();
@@ -115,7 +116,7 @@ export default function WrongNotesPage() {
                         className="hint-reveal mt-2 rounded-xl px-3 py-2 text-xs whitespace-pre-line"
                         style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
                       >
-                        {w.hint}
+                        <HintText text={w.hint} />
                       </div>
                     )}
                   </div>
