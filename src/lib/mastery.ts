@@ -104,14 +104,26 @@ export async function resetWordMastery(userId: string, word: WordEntry): Promise
   await supabase.from("word_mastery").delete().eq("user_id", userId).eq("word_key", wordKey(word));
 }
 
+// 점수 구간은 딱 5가지 값(0·40·50·60·100)뿐이라, 지터 없이 우선순위 그대로 정렬하면
+// 같은 단어 묶음을 반복 연습할 때마다 "약한 단어 뭉치 → 안 본 단어 → 잘 아는 단어"라는
+// 뭉치의 경계가 매번 정확히 똑같아져서, 전체적으로 항상 비슷한 순서로 보이는 문제가
+// 있었다. 인접 구간(간격 10: 40↔50↔60)끼리는 종종 뒤섞이되, 멀리 떨어진 구간(0↔40,
+// 60↔100, 간격 40)까지 역전되지는 않을 정도로 지터 폭을 잡아서, "약한 단어가 대체로
+// 먼저 나온다"는 취지는 지키면서도 세션마다 눈에 띄게 다른 순서가 되게 한다.
+const PRIORITY_JITTER = 12;
+
 /**
  * 이미 섞인(shuffle된) 목록을 받아, 점수가 낮은(모름/헷갈림) 단어가 앞쪽에 오도록
- * 안정 정렬한다. 같은 점수 구간 안에서는 원래(셔플된) 순서를 그대로 유지하므로
- * "약한 단어 우선 + 그 안에서는 무작위"가 된다.
+ * 정렬한다. 우선순위에 매번 새로운 무작위 지터를 더해서 정렬하므로, 인접 구간끼리는
+ * 세션마다 순서가 달라지고 같은 구간 안에서는 원래(셔플된) 순서를 유지한다.
  */
 export function prioritizeByMastery<T extends WordEntry>(shuffled: T[], mastery: Map<string, number>): T[] {
   return shuffled
-    .map((w, i) => ({ w, i, p: mastery.get(wordKey(w)) ?? UNSEEN_PRIORITY }))
+    .map((w, i) => ({
+      w,
+      i,
+      p: (mastery.get(wordKey(w)) ?? UNSEEN_PRIORITY) + (Math.random() * PRIORITY_JITTER * 2 - PRIORITY_JITTER),
+    }))
     .sort((a, b) => a.p - b.p || a.i - b.i)
     .map((x) => x.w);
 }
