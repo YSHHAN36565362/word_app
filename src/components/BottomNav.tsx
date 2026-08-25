@@ -8,6 +8,7 @@ import { useFocusMode } from "@/contexts/FocusModeContext";
 const TABS = [
   { href: "/study", label: "학습", icon: "/images/study.jpeg" },
   { href: "/practice", label: "연습", icon: "/images/practice.jpeg" },
+  { href: "/match", label: "매칭게임", icon: "/images/match.jpeg" },
   { href: "/exam", label: "시험", icon: "/images/test.png" },
   { href: "/wrongnotes", label: "오답노트", icon: "/images/note.jpeg" },
   { href: "/more", label: "설정", icon: "/images/setting.jpeg" },

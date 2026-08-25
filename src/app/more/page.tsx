@@ -6,7 +6,6 @@ const ITEMS = [
   { href: "/stats", title: "학습 통계", desc: "일자별 연습/시험 기록과 정답률 추이", icon: "통", accent: "var(--blue)" },
   { href: "/favorites", title: "즐겨찾기", desc: "별표 표시한 단어만 모아보기", icon: "즐", accent: "var(--amber)", iconColor: "#2b2200" },
   { href: "/more/review", title: "복습", desc: "완벽함·조금 앎으로 채점한 단어 다시 보기", icon: "복", accent: "var(--blue)" },
-  { href: "/match", title: "매칭 게임", desc: "단어와 뜻을 빠르게 짝지어 맞히기", icon: "매", accent: "#8b5cf6" },
   { href: "/script", title: "지문 외우기", desc: "회화문/독해 지문을 한 줄씩 암송", icon: "지", accent: "var(--blue)" },
   { href: "/wordbook", title: "단어장 추가", desc: "새 단어장을 GitHub에 직접 업로드", icon: "단", accent: "var(--amber)", iconColor: "#2b2200" },
   { href: "/more/settings", title: "설정", desc: "내 번호, 다크 모드, 학습 기록 관리", icon: "설", accent: "#8a8a94" },

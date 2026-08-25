@@ -15,6 +15,8 @@ import SessionInfoPanel from "@/components/SessionInfoPanel";
 import PageHeader from "@/components/PageHeader";
 import Confetti from "@/components/Confetti";
 import FeedbackFlash from "@/components/FeedbackFlash";
+import SpeakButton from "@/components/SpeakButton";
+import MemoPad from "@/components/MemoPad";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
@@ -383,6 +385,7 @@ function PracticePageInner() {
       <FocusScreen
         top={
           <>
+            <MemoPad />
             <FeedbackFlash flashKey={flashKey} color={flashColor} />
             {!finished && current && (
               <>
@@ -437,7 +440,7 @@ function PracticePageInner() {
               <Mascot state="correct" />
             </div>
             <div className="text-lg font-bold" style={{ color: "var(--accent)" }}>
-              {roundSize}개 라운드 완료! 🎉
+              {roundSize}개 라운드 완료!
             </div>
             <div className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
               전체 {doneCount} / {total} · {queue.length + 1}개 남음
@@ -448,7 +451,8 @@ function PracticePageInner() {
           </div>
         ) : !finished && current ? (
           <div className="mt-3">
-            <div className="mb-1.5 flex justify-end">
+            <div className="mb-1.5 flex items-center justify-end gap-1">
+              <SpeakButton text={current.word} compact />
               <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
                 {favorites.has(wordKey(current)) ? "★" : "☆"}
               </button>
@@ -464,7 +468,7 @@ function PracticePageInner() {
                       className="rounded-full px-2.5 py-1 text-[11px] font-bold"
                       style={{ background: "var(--red)", color: "#fff" }}
                     >
-                      🔥 자주 틀리는 단어 · {wrongCount}회
+                      자주 틀리는 단어 · {wrongCount}회
                     </span>
                   )}
                   <div className="text-lg font-bold text-center" style={{ color: "var(--text-muted)" }}>

@@ -70,7 +70,7 @@ export default function ReviewPage() {
 
       {!loading && dueCount > 0 && (
         <div className="mt-4 study-card p-4" style={{ borderColor: "var(--accent)" }}>
-          <div className="text-sm font-bold">📅 오늘의 복습 {dueCount}개</div>
+          <div className="text-sm font-bold">오늘의 복습 {dueCount}개</div>
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
             간격 반복 주기가 다 돼서 다시 볼 때가 된 단어들입니다. 맞힌 단어일수록 복습
             간격이 점점 늘어나요(1일 → 3일 → 7일 ...).

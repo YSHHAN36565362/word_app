@@ -11,6 +11,8 @@ import Spinner from "@/components/Spinner";
 import SessionInfoPanel from "@/components/SessionInfoPanel";
 import PageHeader from "@/components/PageHeader";
 import Confetti from "@/components/Confetti";
+import SpeakButton from "@/components/SpeakButton";
+import MemoPad from "@/components/MemoPad";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
@@ -200,14 +202,17 @@ export default function StudyPage() {
     return (
       <FocusScreen
         top={
-          !done && current ? (
-            <>
-              <ProgressBar ratio={index / Math.max(1, words.length)} />
-              <div className="mt-2 text-center text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-                {index + 1} / {words.length}
-              </div>
-            </>
-          ) : null
+          <>
+            <MemoPad />
+            {!done && current && (
+              <>
+                <ProgressBar ratio={index / Math.max(1, words.length)} />
+                <div className="mt-2 text-center text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+                  {index + 1} / {words.length}
+                </div>
+              </>
+            )}
+          </>
         }
         actions={
           !done && current ? (
@@ -234,6 +239,7 @@ export default function StudyPage() {
               <div className="text-2xl font-extrabold" style={{ color: "var(--blue)" }}>
                 {current.word}
               </div>
+              <SpeakButton text={current.word} compact />
               <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
                 {favorites.has(wordKey(current)) ? "★" : "☆"}
               </button>
