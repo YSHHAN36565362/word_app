@@ -343,7 +343,15 @@ export default function StudyPage() {
         ready={ready}
         part="study"
         selectedFiles={selectedFiles}
-        onRestore={(paths) => setRestoreRequest({ paths, autoStart: true })}
+        onRestore={(paths) => {
+          // "이 학습 다시 하기"가 지금 이어서 볼 수 있는 저장된 진행(saved)과 정확히 같은
+          // 파일 조합을 가리키면, 처음부터 다시 시작하는 대신 그 위치를 그대로 이어간다.
+          if (saved && fileKeyOf(saved.filePaths) === fileKeyOf(paths)) {
+            resume();
+            return;
+          }
+          setRestoreRequest({ paths, autoStart: true });
+        }}
       />
     </div>
   );

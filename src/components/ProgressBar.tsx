@@ -5,14 +5,15 @@ import { motion } from "framer-motion";
 export default function ProgressBar({ ratio }: { ratio: number }) {
   const pct = Math.max(0, Math.min(1, ratio)) * 100;
   return (
-    <div className="h-3 w-full rounded-full overflow-hidden" style={{ background: "var(--hint-bg)" }}>
+    <div className="progress-jelly-track">
       <motion.div
-        className="h-full rounded-full"
-        style={{ background: "var(--accent)" }}
-        initial={{ width: 0 }}
+        className="progress-jelly-fill"
+        initial={false}
         animate={{ width: `${pct}%` }}
-        transition={{ type: "spring", stiffness: 120, damping: 20 }}
-      />
+        transition={{ type: "spring", stiffness: 140, damping: 18 }}
+      >
+        <span className="progress-jelly-shine" />
+      </motion.div>
     </div>
   );
 }

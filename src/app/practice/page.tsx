@@ -21,7 +21,7 @@ import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, shuffle, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, loadProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
-import { loadAllMastery, loadMasteredWords, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
+import { computeNextMastery, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, loadFavorites, removeFavorite } from "@/lib/favorites";
 import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
@@ -29,6 +29,13 @@ import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
 const WRONG_NOTES_PATH_KEY = "__wrong_notes__";
 const FAVORITES_PATH_KEY = "__favorites__";
 const REVIEW_PATH_KEY = "__review__";
+const DUE_REVIEW_PATH_KEY = "__due_review__";
+// 마이크로 러닝: 한 번에 몰아서 외우게 하지 않고 15개 단위 "라운드"로 쪼갠다. 라운드를
+// 마칠 때마다 짧은 결과 화면을 보여줘서 큰 대기열(수백 개) 앞에서도 매번 작은 목표만
+// 보게 한다. 3~4번째 요구사항(마이크로 러닝, 진행률 바)이 여기서 같이 맞물린다.
+const ROUND_SIZE = 15;
+// 이 이상 헷갈림/모름으로 채점된 단어는 "자주 틀리는 단어" 배지를 붙인다.
+const FREQUENTLY_WRONG_THRESHOLD = 3;
 
 interface RestoreRequest {
   paths: string[];
@@ -56,6 +63,7 @@ function PracticePageInner() {
   const fromWrongNotes = searchParams.get("from") === "wrongnotes";
   const fromFavorites = searchParams.get("from") === "favorites";
   const fromReview = searchParams.get("from") === "review";
+  const fromDueReview = searchParams.get("from") === "due";
 
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
@@ -87,10 +95,20 @@ function PracticePageInner() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [flashKey, setFlashKey] = useState(0);
   const [flashColor, setFlashColor] = useState<string | null>(null);
+  // 단어별 숙련도(점수·틀린 횟수·SRS 간격)를 세션 내내 들고 있는다 — "자주 틀리는 단어"
+  // 배지가 채점 즉시 반영되게 하려면 서버 응답을 기다리지 않고 로컬에서도 갱신해야 한다.
+  const [mastery, setMastery] = useState<Map<string, MasteryInfo>>(new Map());
+  // 라운드(15개) 하나를 다 채웠을 때 true — 다음 카드 대신 짧은 라운드 완료 화면을 보여준다.
+  const [roundGateOpen, setRoundGateOpen] = useState(false);
 
   useEffect(() => {
     if (!ready || !userId) return;
     loadFavoriteKeys(userId).then(setFavorites);
+  }, [ready, userId]);
+
+  useEffect(() => {
+    if (!ready || !userId) return;
+    loadAllMastery(userId).then(setMastery);
   }, [ready, userId]);
 
   useEffect(() => {
@@ -130,7 +148,7 @@ function PracticePageInner() {
     upsertLearningLog(userId, "practice", next.paths, fileSummaryOf(next.labels), next.total, next.done, next.m);
   }
 
-  function startWithList(list: WordEntry[], mastery: Map<string, number>, selectedMode: StudyMode, labels: string[], paths: string[]) {
+  function startWithList(list: WordEntry[], mastery: Map<string, MasteryInfo>, selectedMode: StudyMode, labels: string[], paths: string[]) {
     if (list.length === 0) return;
     const shuffled = shuffle(list);
     const pool = mastery.size > 0 ? prioritizeByMastery(shuffled, mastery) : shuffled;
@@ -151,6 +169,8 @@ function PracticePageInner() {
     setFilesLabel(labels);
     setActiveFilePaths(paths);
     setTurnId((t) => t + 1);
+    setMastery(mastery);
+    setRoundGateOpen(false);
     setFocus(true);
 
     persist({ queue: q, current: first, total: pool.length, done: 0, side, m: selectedMode, labels, paths });
@@ -164,7 +184,10 @@ function PracticePageInner() {
     // 단어 목록(GitHub)과 숙련도 기록(Supabase)은 서로 무관한 데이터라 동시에 요청한다.
     // 이전에는 단어 목록을 다 받은 "다음에야" 숙련도를 조회해서(waterfall) 그만큼 더
     // 느렸다 — 이게 최근 체감 지연의 주요 원인이었다.
-    const [list, mastery] = await Promise.all([fetchWords(paths), userId ? loadAllMastery(userId) : Promise.resolve(new Map<string, number>())]);
+    const [list, mastery] = await Promise.all([
+      fetchWords(paths),
+      userId ? loadAllMastery(userId) : Promise.resolve(new Map<string, MasteryInfo>()),
+    ]);
     startWithList(list, mastery, selectedMode, labels, paths);
     setStarting(false);
   }
@@ -186,6 +209,7 @@ function PracticePageInner() {
     setFilesLabel(saved.filesLabel);
     setActiveFilePaths(saved.filePaths);
     setTurnId((t) => t + 1);
+    setRoundGateOpen(false);
     setFocus(true);
   }
 
@@ -232,6 +256,15 @@ function PracticePageInner() {
     setStarting(false);
   }
 
+  // 간격 반복(SRS) 주기가 다 돼서 오늘 다시 볼 때가 된 단어만 골라 시작한다.
+  async function beginFromDueReview() {
+    if (!userId) return;
+    setStarting(true);
+    const [list, mastery] = await Promise.all([loadDueReviewWords(userId), loadAllMastery(userId)]);
+    startWithList(list, mastery, "random", ["오늘의 복습"], [DUE_REVIEW_PATH_KEY]);
+    setStarting(false);
+  }
+
   // 아직 채점 안 한 대기열의 순서만 다시 섞는다(현재 보여주고 있는 단어는 그대로 둔다).
   // 같은 조합을 여러 번 반복하다 보면 내용이 아니라 "다음에 뭐가 나올지" 순서로
   // 외워버릴 수 있어서, 진행 중에도 원하면 순서를 바꿀 수 있게 한다.
@@ -261,6 +294,12 @@ function PracticePageInner() {
     }
     const nextCurrent = nextQueue.length > 0 ? nextQueue.shift()! : null;
     const nextSide = getDisplaySide(mode);
+    // 15개짜리 라운드를 막 채웠고(전에는 아니었고) 아직 큐에 남은 게 있으면, 다음 카드로
+    // 바로 넘어가는 대신 짧은 라운드 완료 화면을 한 번 보여준다.
+    const crossedRound = nextDone > doneCount && nextDone % ROUND_SIZE === 0 && (nextQueue.length > 0 || nextCurrent !== null);
+
+    const key = wordKey(current);
+    const nextInfo = computeNextMastery(mastery.get(key), level);
 
     setMascotState(level >= 60 ? "correct" : "wrong");
     setQueue(nextQueue);
@@ -272,9 +311,15 @@ function PracticePageInner() {
     setTurnId((t) => t + 1);
     setFlashColor(level >= 60 ? "var(--accent)" : "var(--red)");
     setFlashKey((k) => k + 1);
+    setMastery((m) => {
+      const next = new Map(m);
+      next.set(key, nextInfo);
+      return next;
+    });
+    if (crossedRound) setRoundGateOpen(true);
 
     persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, labels: filesLabel, paths: activeFilePaths });
-    if (userId) saveWordMastery(userId, current, level);
+    if (userId) saveWordMastery(userId, current, nextInfo);
   }
 
   const finished = focus && current === null && queue.length === 0 && total > 0;
@@ -316,12 +361,23 @@ function PracticePageInner() {
       Numpad4: () => { if (showAnswer) score(60); },
       Numpad6: () => { if (showAnswer) score(40); },
     },
-    focus && !finished && current !== null
+    // 라운드 완료 화면이 떠 있는 동안은 카드가 안 보이므로 단축키도 꺼둔다 — 안 그러면
+    // "정답 확인"/채점 키를 눌렀을 때 화면에 없는 다음 라운드 첫 단어가 몰래 넘어간다.
+    focus && !finished && current !== null && !roundGateOpen
   );
 
   if (focus) {
     const qText = current ? (displaySide === 0 ? current.word : current.meaning) : "";
     const aText = current ? (displaySide === 0 ? current.meaning : current.word) : "";
+    const wrongCount = current ? mastery.get(wordKey(current))?.wrongCount ?? 0 : 0;
+    const roundSize = Math.min(ROUND_SIZE, total || ROUND_SIZE);
+    // doneCount가 라운드 크기의 정확한 배수인 순간은 두 가지 의미가 있다: 라운드 완료
+    // 화면이 떠 있는 동안은 "방금 끝난 라운드가 꽉 찼다"(가득 찬 바), 그 화면을 닫고
+    // 다음 라운드로 넘어간 뒤에는 "새 라운드에서 아직 아무것도 안 했다"(빈 바)는 뜻이라
+    // roundGateOpen 여부로 둘을 구분한다.
+    const atRoundBoundary = doneCount > 0 && doneCount % roundSize === 0;
+    const posInRound = atRoundBoundary && !roundGateOpen ? 0 : doneCount === 0 ? 0 : ((doneCount - 1) % roundSize) + 1;
+    const roundRatio = roundSize > 0 ? posInRound / roundSize : 0;
 
     return (
       <FocusScreen
@@ -330,20 +386,22 @@ function PracticePageInner() {
             <FeedbackFlash flashKey={flashKey} color={flashColor} />
             {!finished && current && (
               <>
-                <ProgressBar ratio={doneCount / Math.max(1, total)} />
+                <ProgressBar ratio={roundRatio} />
                 <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-                  <span>완료 {doneCount} / {total}</span>
-                  <span>남은 큐 {queue.length + 1}개</span>
+                  <span>이번 라운드 {posInRound} / {roundSize}</span>
+                  <span>전체 {doneCount} / {total}</span>
                 </div>
-                <div className="mt-4 flex justify-center">
-                  <Mascot state={mascotState} reactionKey={turnId} />
-                </div>
+                {!roundGateOpen && (
+                  <div className="mt-4 flex justify-center">
+                    <Mascot state={mascotState} reactionKey={turnId} />
+                  </div>
+                )}
               </>
             )}
           </>
         }
         actions={
-          !finished && current ? (
+          !finished && current && !roundGateOpen ? (
             !showAnswer ? (
               <button onClick={revealAnswer} className="btn-3d btn-blue w-full">
                 정답 확인
@@ -372,7 +430,23 @@ function PracticePageInner() {
           ) : undefined
         }
       >
-        {!finished && current ? (
+        {!finished && current && roundGateOpen ? (
+          <div className="study-card relative mt-8 p-8 text-center">
+            <Confetti />
+            <div className="flex justify-center mb-3">
+              <Mascot state="correct" />
+            </div>
+            <div className="text-lg font-bold" style={{ color: "var(--accent)" }}>
+              {roundSize}개 라운드 완료! 🎉
+            </div>
+            <div className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+              전체 {doneCount} / {total} · {queue.length + 1}개 남음
+            </div>
+            <button onClick={() => setRoundGateOpen(false)} className="btn-3d btn-accent mt-4 w-full">
+              다음 라운드 계속하기
+            </button>
+          </div>
+        ) : !finished && current ? (
           <div className="mt-3">
             <div className="mb-1.5 flex justify-end">
               <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
@@ -385,6 +459,14 @@ function PracticePageInner() {
               front={<div className="text-2xl font-extrabold text-center">{qText}</div>}
               back={
                 <div className="flex flex-col items-center gap-2">
+                  {wrongCount >= FREQUENTLY_WRONG_THRESHOLD && (
+                    <span
+                      className="rounded-full px-2.5 py-1 text-[11px] font-bold"
+                      style={{ background: "var(--red)", color: "#fff" }}
+                    >
+                      🔥 자주 틀리는 단어 · {wrongCount}회
+                    </span>
+                  )}
                   <div className="text-lg font-bold text-center" style={{ color: "var(--text-muted)" }}>
                     {qText}
                   </div>
@@ -442,7 +524,7 @@ function PracticePageInner() {
             }
           }}
           label="연습 종료하기"
-          extraAction={!finished && queue.length > 1 ? { label: "단어 순서 섞기", onClick: shuffleQueue } : undefined}
+          extraAction={!finished && !roundGateOpen && queue.length > 1 ? { label: "단어 순서 섞기", onClick: shuffleQueue } : undefined}
         />
       </FocusScreen>
     );
@@ -529,6 +611,22 @@ function PracticePageInner() {
         </div>
       )}
 
+      {fromDueReview && userId && (
+        <div className="mt-4 study-card p-4">
+          <div className="text-sm">간격 반복 주기가 다 돼서 오늘 다시 볼 때가 된 단어만 골라 연습합니다.</div>
+          <button onClick={beginFromDueReview} disabled={starting} className="btn-3d btn-accent mt-3 w-full">
+            {starting ? (
+              <>
+                <Spinner size={16} className="mr-2" />
+                불러오는 중...
+              </>
+            ) : (
+              "오늘의 복습 시작"
+            )}
+          </button>
+        </div>
+      )}
+
       <div className="mt-5">
         <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restoreRequest?.paths ?? null} />
       </div>
@@ -550,9 +648,16 @@ function PracticePageInner() {
         ready={ready}
         part="practice"
         selectedFiles={selectedFiles}
-        onRestore={(paths, mode) =>
-          setRestoreRequest({ paths, mode: isStudyMode(mode) ? mode : "random", autoStart: true })
-        }
+        onRestore={(paths, mode) => {
+          // "이 학습 다시 하기"가 지금 이어서 할 수 있는 저장된 진행(saved)과 정확히 같은
+          // 파일 조합을 가리키면, 처음부터 다시 섞어 시작하는 대신 그 진행을 그대로
+          // 이어간다 — 안 그러면 방금까지 쌓은 완료 개수가 0으로 리셋된 것처럼 보인다.
+          if (saved && fileKeyOf(saved.filePaths) === fileKeyOf(paths)) {
+            resume();
+            return;
+          }
+          setRestoreRequest({ paths, mode: isStudyMode(mode) ? mode : "random", autoStart: true });
+        }}
       />
     </div>
   );

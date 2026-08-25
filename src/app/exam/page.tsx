@@ -17,9 +17,9 @@ import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
-import { getDisplaySide, shuffle } from "@/lib/queue";
+import { getDisplaySide, shuffle, wordKey } from "@/lib/queue";
 import { addWordsToWrongNotes, appendStudyStat, deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
-import { loadAllMastery, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
+import { computeNextMastery, loadAllMastery, MasteryInfo, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { ExamProgress, FileRef, StudyMode, WordEntry } from "@/lib/types";
 
 export default function ExamPage() {
@@ -28,7 +28,7 @@ export default function ExamPage() {
 
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [availableWords, setAvailableWords] = useState<WordEntry[]>([]);
-  const [masteryMap, setMasteryMap] = useState<Map<string, number>>(new Map());
+  const [masteryMap, setMasteryMap] = useState<Map<string, MasteryInfo>>(new Map());
   const [loadingWords, setLoadingWords] = useState(false);
   const [countInput, setCountInput] = useState(10);
   const [saved, setSaved] = useState<ExamProgress | null>(null);
@@ -70,7 +70,7 @@ export default function ExamPage() {
     setLoadingWords(true);
     // 단어 목록(GitHub)과 숙련도 기록(Supabase)을 동시에 미리 받아둔다 — 파일을 고른
     // 시점에 끝내두면, 나중에 [이름만/뜻만/랜덤 시험] 버튼을 눌렀을 때 기다릴 게 없다.
-    Promise.all([fetchWords(selectedFiles.map((f) => f.path)), userId ? loadAllMastery(userId) : Promise.resolve(new Map<string, number>())]).then(
+    Promise.all([fetchWords(selectedFiles.map((f) => f.path)), userId ? loadAllMastery(userId) : Promise.resolve(new Map<string, MasteryInfo>())]).then(
       ([list, mastery]) => {
         setAvailableWords(list);
         setMasteryMap(mastery);
@@ -180,7 +180,15 @@ export default function ExamPage() {
     setFlashKey((k) => k + 1);
 
     persist({ queue: nextQueue, current: nextCurrent, total, num: nextNumber, correct: nextCorrect, wrong: nextWrong, side: nextSide, m: mode, labels: filesLabel });
-    if (userId) saveWordMastery(userId, current, correct ? 100 : 0);
+    if (userId) {
+      const nextInfo = computeNextMastery(masteryMap.get(wordKey(current)), correct ? 100 : 0);
+      setMasteryMap((m) => {
+        const next = new Map(m);
+        next.set(wordKey(current), nextInfo);
+        return next;
+      });
+      saveWordMastery(userId, current, nextInfo);
+    }
   }
 
   const finished = focus && current === null && total > 0;

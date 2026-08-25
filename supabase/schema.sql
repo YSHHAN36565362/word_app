@@ -48,7 +48,17 @@ alter table word_mastery add column if not exists word text;
 alter table word_mastery add column if not exists meaning text;
 alter table word_mastery add column if not exists hint text;
 
+-- 간격 반복(SRS, SuperMemo-2에서 착안)과 "자주 틀리는 단어" 배지에 쓰는 컬럼들.
+-- wrong_count: 헷갈림(40)·모름(0)으로 채점된 누적 횟수. repetition/interval_days:
+-- 연속으로 맞힌 횟수와 그에 따라 늘어나는 복습 간격(일). next_review_at: 다음 복습
+-- 예정 시각 — "복습" 화면에서 지금 복습할 때가 된 단어를 우선 추천하는 데 쓴다.
+alter table word_mastery add column if not exists wrong_count int not null default 0;
+alter table word_mastery add column if not exists repetition int not null default 0;
+alter table word_mastery add column if not exists interval_days int not null default 0;
+alter table word_mastery add column if not exists next_review_at timestamptz;
+
 create index if not exists word_mastery_user_id_idx on word_mastery (user_id);
+create index if not exists word_mastery_review_idx on word_mastery (user_id, next_review_at);
 
 -- 파일 조합별 진행 기록 요약. progress 테이블은 "진행 중인 세션 딱 1개"만 담고 완료하면
 -- 지워지는 데 반해, 이 테이블은 (user_id, part, file_key) 조합마다 별도 행으로 남아서
