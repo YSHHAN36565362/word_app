@@ -185,18 +185,33 @@ export async function resetWordMastery(userId: string, word: WordEntry): Promise
 // 먼저 나온다"는 취지는 지키면서도 세션마다 눈에 띄게 다른 순서가 되게 한다.
 const PRIORITY_JITTER = 12;
 
+// 잘 아는 단어(60점 이상)인데 SRS 복습 예정일이 아직 안 지났다면, 이만큼 더 뒤로 민다.
+// 안키의 "learning steps(세션 내 재출제) vs review(날짜 기준 복습)" 구분과 비슷하게,
+// "아직 복습할 때가 안 된 단어"가 매 세션 앞자리를 차지하지 않도록 하기 위함이다.
+const NOT_DUE_PUSH = 30;
+
 /**
  * 이미 섞인(shuffle된) 목록을 받아, 점수가 낮은(모름/헷갈림) 단어가 앞쪽에 오도록
  * 정렬한다. 우선순위에 매번 새로운 무작위 지터를 더해서 정렬하므로, 인접 구간끼리는
- * 세션마다 순서가 달라지고 같은 구간 안에서는 원래(셔플된) 순서를 유지한다.
+ * 세션마다 순서가 달라지고 같은 구간 안에서는 원래(셔플된) 순서를 유지한다. 잘 아는
+ * 단어 중에서도 SRS 복습일이 아직 안 된 것은 한 번 더 뒤로 밀어서, "오늘 복습할 때가
+ * 된" 단어가 상대적으로 먼저 나오게 한다.
  */
 export function prioritizeByMastery<T extends WordEntry>(shuffled: T[], mastery: Map<string, MasteryInfo>): T[] {
+  const now = Date.now();
   return shuffled
-    .map((w, i) => ({
-      w,
-      i,
-      p: (mastery.get(wordKey(w))?.score ?? UNSEEN_PRIORITY) + (Math.random() * PRIORITY_JITTER * 2 - PRIORITY_JITTER),
-    }))
+    .map((w, i) => {
+      const info = mastery.get(wordKey(w));
+      const notDueYet = !!info && info.nextReviewAt != null && new Date(info.nextReviewAt).getTime() > now;
+      return {
+        w,
+        i,
+        p:
+          (info?.score ?? UNSEEN_PRIORITY) +
+          (notDueYet ? NOT_DUE_PUSH : 0) +
+          (Math.random() * PRIORITY_JITTER * 2 - PRIORITY_JITTER),
+      };
+    })
     .sort((a, b) => a.p - b.p || a.i - b.i)
     .map((x) => x.w);
 }
