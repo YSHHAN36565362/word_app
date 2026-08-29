@@ -1,15 +1,30 @@
 "use client";
 
+import { useMemo } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 
 export type MascotState = "idle" | "correct" | "wrong";
 
-const MASCOT_IMAGE: Record<MascotState, string> = {
+const MASCOT_IMAGE: Record<Exclude<MascotState, "wrong">, string> = {
   idle: "/images/normal.jpeg",
   correct: "/images/correct-banner.png",
-  wrong: "/images/wrong-banner.png",
 };
+
+// 모름/헷갈림은 다른 상태보다 훨씬 자주 나오는데, 매번 같은 한숨 쉬는 그림만 보면
+// 사용자가 지칠 수 있어서 여러 장을 두고 매번 랜덤으로 고른다. 시골에서 농사짓기·
+// 해고 등 살짝 유머러스한 그림도 섞어서 너무 침울하게만 느껴지지 않게 했다.
+const WRONG_IMAGES = [
+  "/images/wrong-banner.png",
+  "/images/wrong-banner-2.png",
+  "/images/wrong-banner-3.png",
+  "/images/wrong-banner-4.png",
+  "/images/wrong-banner-5.png",
+  "/images/wrong-banner-6.png",
+  "/images/wrong-banner-7.png",
+  "/images/wrong-banner-8.png",
+  "/images/wrong-banner-9.png",
+];
 
 // 배경에 살짝 색을 깔아, 투명 배경인 일러스트가 카드처럼 떠 보이게 한다.
 const MASCOT_BG: Record<MascotState, string> = {
@@ -36,6 +51,18 @@ interface MascotProps {
  * 잘리거나 늘어나지 않고 항상 전체가 그대로 보인다(레터박스로 여백만 생김).
  */
 export default function Mascot({ state, reactionKey }: MascotProps) {
+  // Math.random을 렌더 중에 직접 쓰면 순수하지 않은 렌더가 되므로, reactionKey를
+  // 해시해서 결정론적으로 "무작위처럼 보이는" 인덱스를 뽑는다 — reactionKey(turnId)가
+  // 매 문제마다 바뀌므로 결과적으로 매번 다른 그림이 나오되, 같은 렌더 중에는 항상
+  // 같은 값이 나오는 순수 함수다.
+  const wrongSrc = useMemo(() => {
+    const seed = String(reactionKey ?? "");
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+    return WRONG_IMAGES[Math.abs(hash) % WRONG_IMAGES.length];
+  }, [reactionKey]);
+  const src = state === "wrong" ? wrongSrc : MASCOT_IMAGE[state];
+
   return (
     <motion.div
       key={reactionKey ?? state}
@@ -55,8 +82,8 @@ export default function Mascot({ state, reactionKey }: MascotProps) {
       }
     >
       <Image
-        key={state}
-        src={MASCOT_IMAGE[state]}
+        key={src}
+        src={src}
         alt=""
         fill
         sizes="16rem"

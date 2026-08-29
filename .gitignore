@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Anki deck packages (수백MB~1GB급이라 절대 커밋하면 안 됨 — GitHub 단일 파일 100MB 제한 초과)
+*.apkg
