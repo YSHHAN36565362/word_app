@@ -362,8 +362,12 @@ export default function ExamPage() {
       </p>
 
       {ready && !userId && (
-        <div className="mt-3 rounded-xl px-4 py-2.5 text-xs" style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}>
-          <Link href="/more/settings" className="font-bold underline">
+        <div
+          className="mt-3 rounded-xl px-4 py-3 text-sm font-bold"
+          style={{ background: "var(--accent-soft)", color: "var(--accent-dark)", border: "1.5px solid var(--accent)" }}
+        >
+          💾{" "}
+          <Link href="/more/settings" className="underline">
             내 번호
           </Link>
           를 설정하면 오답 노트 · 통계가 기기 간에 저장됩니다.

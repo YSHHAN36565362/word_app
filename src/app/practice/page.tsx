@@ -103,6 +103,21 @@ function PracticePageInner() {
   const [mastery, setMastery] = useState<Map<string, MasteryInfo>>(new Map());
   // 라운드(15개) 하나를 다 채웠을 때 true — 다음 카드 대신 짧은 라운드 완료 화면을 보여준다.
   const [roundGateOpen, setRoundGateOpen] = useState(false);
+  // 마스코트 일러스트가 무겁게 느껴지는 사람을 위한 끄기 스위치. 기기마다 다르게
+  // 켜둘 수 있어서(계정이 아니라) localStorage에만 저장한다 — ThemeContext와 같은
+  // 이유로, SSR과 hydration이 어긋나지 않게 기본값 false로 먼저 그린 뒤 마운트 후
+  // 저장된 값으로 갱신한다.
+  const [hideMascot, setHideMascot] = useState(false);
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (window.localStorage.getItem("word_app_practice_hide_mascot") === "1") setHideMascot(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("word_app_practice_hide_mascot", hideMascot ? "1" : "0");
+  }, [hideMascot]);
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -394,12 +409,21 @@ function PracticePageInner() {
             <FeedbackFlash flashKey={flashKey} color={flashColor} />
             {!finished && current && (
               <>
+                <label className="flex items-center justify-end gap-1.5 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+                  <input
+                    type="checkbox"
+                    checked={hideMascot}
+                    onChange={(e) => setHideMascot(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  애니메이션 끄기
+                </label>
                 <ProgressBar ratio={roundRatio} />
                 <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
                   <span>이번 라운드 {posInRound} / {roundSize}</span>
                   <span>전체 {doneCount} / {total}</span>
                 </div>
-                {!roundGateOpen && (
+                {!roundGateOpen && !hideMascot && (
                   <div className="mt-4 flex justify-center">
                     <Mascot state={mascotState} reactionKey={turnId} />
                   </div>
@@ -563,8 +587,12 @@ function PracticePageInner() {
       </p>
 
       {ready && !userId && (
-        <div className="mt-3 rounded-xl px-4 py-2.5 text-xs" style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}>
-          <Link href="/more/settings" className="font-bold underline">
+        <div
+          className="mt-3 rounded-xl px-4 py-3 text-sm font-bold"
+          style={{ background: "var(--accent-soft)", color: "var(--accent-dark)", border: "1.5px solid var(--accent)" }}
+        >
+          💾{" "}
+          <Link href="/more/settings" className="underline">
             내 번호
           </Link>
           를 설정하면 연습 진행 상황이 기기 간에 저장됩니다.
