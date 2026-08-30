@@ -10,6 +10,12 @@ export interface FileRef {
   filename: string;
 }
 
+// _IT 단어장은 일본어가 아니라서 "한자 맞추기" 같은 표현이 안 맞는다 — 그 경우에만
+// 기존 이름(이름만/뜻만)을 그대로 쓰고, 일본어 단어장에서는 더 직관적인 이름으로 바꾼다.
+export function isItSelection(files: FileRef[]): boolean {
+  return files.length > 0 && files.every((f) => f.path.includes("/_IT/"));
+}
+
 export interface SubfolderNode {
   name: string;
   files: FileRef[];

@@ -27,7 +27,7 @@ import { appendStudyStat, deleteProgress, loadProgress, loadWrongNotes, saveProg
 import { computeNextMastery, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, loadFavorites, removeFavorite } from "@/lib/favorites";
-import { FileRef, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
+import { FileRef, isItSelection, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
 
 const WRONG_NOTES_PATH_KEY = "__wrong_notes__";
 const FAVORITES_PATH_KEY = "__favorites__";
@@ -414,19 +414,19 @@ function PracticePageInner() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => score(100)} className="btn-3d btn-accent">
-                  완벽함 (100)
+                  완벽함 (100 · 7일 후)
                   <KeyBadge>4 · ↑ · W · Num8</KeyBadge>
                 </button>
                 <button onClick={() => score(60)} className="btn-3d btn-blue">
-                  조금 앎 (60)
+                  조금 앎 (60 · 3일 후)
                   <KeyBadge>3 · ← · A · Num4</KeyBadge>
                 </button>
                 <button onClick={() => score(40)} className="btn-3d btn-amber">
-                  헷갈림 (40)
+                  헷갈림 (40 · 잠시 후 다시)
                   <KeyBadge>2 · → · D · Num6</KeyBadge>
                 </button>
                 <button onClick={() => score(0)} className="btn-3d btn-red">
-                  모름 (0)
+                  모름 (0 · 곧 다시)
                   <KeyBadge>1 · ↓ · S · Num2</KeyBadge>
                 </button>
               </div>

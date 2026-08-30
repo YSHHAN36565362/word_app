@@ -1,8 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CategoryNode, FileRef, WordTree } from "@/lib/types";
+import { CategoryNode, FileRef, SubfolderNode, WordTree } from "@/lib/types";
 import { extractYearMonth } from "@/lib/parser";
+
+// 처음 들어왔을 때는 N2·N3만 체크된 상태로 시작한다 — 나머지(N1, 새로 생긴 다른
+// 세부카테고리 등)는 사용자가 직접 눌러야만 켜지도록 해서, 매번 전부 다 켜져 있어
+// 목록이 너무 커지는 걸 막는다.
+const DEFAULT_CHECKED_SUBFOLDERS = new Set(["N2", "N3"]);
+function defaultSelectedSubs(subfolders: SubfolderNode[]): Set<string> {
+  return new Set(subfolders.filter((s) => DEFAULT_CHECKED_SUBFOLDERS.has(s.name)).map((s) => s.name));
+}
+
+// 이 폴더들은 눌렀을 때 안의 문서 전체가 바로 체크되도록(해제 시 전체 해제) 하는
+// "한 번에 고르는" 특별 취급 폴더 목록.
+const AUTO_CHECK_SUBFOLDERS = new Set(["N2(Tr.Park_word)"]);
 
 interface Props {
   onSelectionChange: (files: FileRef[]) => void;
@@ -48,7 +60,7 @@ export default function FileSelector({ onSelectionChange, restorePaths }: Props)
           if (data.categories.length > 0 && !hasPendingRestore) {
             categoryInitializedRef.current = true;
             setMainCat(data.categories[0].name);
-            setSelectedSubs(new Set(data.categories[0].subfolders.map((s) => s.name)));
+            setSelectedSubs(defaultSelectedSubs(data.categories[0].subfolders));
           } else if (hasPendingRestore) {
             categoryInitializedRef.current = true;
           }
@@ -116,26 +128,42 @@ export default function FileSelector({ onSelectionChange, restorePaths }: Props)
     return currentCategory.files;
   }, [currentCategory, selectedSubs]);
 
+  // AUTO_CHECK_SUBFOLDERS(예: N2(Tr.Park_word))를 선택한 동안은, 그 폴더의 파일들을
+  // "날짜 없음"에 묻히게 두지 않고 목록 맨 위(가장 최근 월보다도 위)에 고정한다.
+  // 선택 해제하면 다시 원래 자리(__none__, 맨 아래)로 돌아간다.
+  const pinnedPaths = useMemo(() => {
+    if (!currentCategory) return new Set<string>();
+    const paths = new Set<string>();
+    for (const s of currentCategory.subfolders) {
+      if (AUTO_CHECK_SUBFOLDERS.has(s.name) && selectedSubs.has(s.name)) {
+        for (const f of s.files) paths.add(f.path);
+      }
+    }
+    return paths;
+  }, [currentCategory, selectedSubs]);
+
   const monthGroups = useMemo(() => {
     const buckets = new Map<string, FileRef[]>();
     for (const f of visibleFiles) {
       const ym = extractYearMonth(f.filename);
-      const key = ym ? `${ym[0]}-${String(ym[1]).padStart(2, "0")}` : "__none__";
+      const key = pinnedPaths.has(f.path) ? "__pinned__" : ym ? `${ym[0]}-${String(ym[1]).padStart(2, "0")}` : "__none__";
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(f);
     }
     const entries = Array.from(buckets.entries());
     entries.sort(([a], [b]) => {
+      if (a === "__pinned__") return -1;
+      if (b === "__pinned__") return 1;
       if (a === "__none__") return 1;
       if (b === "__none__") return -1;
       return b.localeCompare(a);
     });
     return entries.map(([key, files]) => ({
       key,
-      label: key === "__none__" ? "날짜 없음" : `${key.split("-")[0]}년 ${parseInt(key.split("-")[1], 10)}월`,
+      label: key === "__pinned__" ? "모아보기 (고정)" : key === "__none__" ? "날짜 없음" : `${key.split("-")[0]}년 ${parseInt(key.split("-")[1], 10)}월`,
       files: [...files].sort((a, b) => b.filename.localeCompare(a.filename)),
     }));
-  }, [visibleFiles]);
+  }, [visibleFiles, pinnedPaths]);
 
   // 복원된 체크 파일이 속한 월 그룹을 자동으로 펼쳐서, 체크된 걸 스크롤 없이도 바로 보이게 한다.
   useEffect(() => {
@@ -156,12 +184,19 @@ export default function FileSelector({ onSelectionChange, restorePaths }: Props)
   }, [checkedPaths, visibleFiles]);
 
   function toggleSub(name: string) {
+    const willBeSelected = !selectedSubs.has(name);
     setSelectedSubs((prev) => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else next.add(name);
       return next;
     });
+    // N2(Tr.Park_word)는 "한 번에 고르기 쉽게" 모아둔 특별 폴더라, 이 폴더를 누르면
+    // 안의 모든 문서가 바로 체크(해제 시에는 전부 해제)되도록 한다.
+    if (AUTO_CHECK_SUBFOLDERS.has(name)) {
+      const sub = currentCategory?.subfolders.find((s) => s.name === name);
+      if (sub) setFilesChecked(sub.files.map((f) => f.path), willBeSelected);
+    }
   }
 
   function toggleFile(path: string) {
@@ -223,7 +258,7 @@ export default function FileSelector({ onSelectionChange, restorePaths }: Props)
             key={c.name}
             onClick={() => {
               setMainCat(c.name);
-              setSelectedSubs(new Set(c.subfolders.map((s) => s.name)));
+              setSelectedSubs(defaultSelectedSubs(c.subfolders));
             }}
             className="shrink-0 rounded-full px-4 py-2 text-sm font-bold transition-colors"
             style={{
@@ -243,12 +278,20 @@ export default function FileSelector({ onSelectionChange, restorePaths }: Props)
             <button
               key={s.name}
               onClick={() => toggleSub(s.name)}
-              className="rounded-full px-3 py-1.5 text-xs font-bold transition-colors"
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors"
               style={{
                 background: selectedSubs.has(s.name) ? "var(--blue)" : "var(--hint-bg)",
                 color: selectedSubs.has(s.name) ? "#fff" : "var(--text-muted)",
               }}
             >
+              {selectedSubs.has(s.name) && (
+                <span
+                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-black"
+                  style={{ background: "var(--accent)", color: "#fff" }}
+                >
+                  ✓
+                </span>
+              )}
               {s.name} ({s.files.length})
             </button>
           ))}

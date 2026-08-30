@@ -67,25 +67,33 @@ export async function loadAllMastery(userId: string): Promise<Map<string, Master
   return promise;
 }
 
+// 채점 점수별 다음 복습까지의 고정 간격(일). 조금 앎·완벽함은 안키처럼 "오늘은
+// 완료 처리하고, 정해진 날짜가 되면 다음 세션의 큐 위쪽으로 올라오게" 한다(예전의
+// SM-2식 반복 횟수에 따라 점점 늘어나는 간격 대신 점수별 고정값을 쓴다).
+// 모름·헷갈림은 굳이 다음날까지 미루면 오늘 안에 다시 볼 기회가 없어져 버려서
+// 오히려 학습에 방해가 된다 — 그래서 간격을 0으로 둬 "항상 지금 다시 봐야 하는
+// 상태"로 유지하고, 실제로 얼마나 빨리 다시 만나는지는 queue.ts의 requeuePosition
+// (이번 세션 안에서 모름은 5~15%, 헷갈림은 20~40% 위치에 재삽입)이 정한다.
+const FIXED_INTERVAL_DAYS: Record<ScoreLevel, number> = {
+  0: 0,
+  40: 0,
+  60: 3,
+  100: 7,
+};
+
 /**
- * 방금 채점한 점수로부터 다음 SRS 상태를 계산한다(SuperMemo-2에서 착안한 단순화 버전).
- * 60점 이상(맞음)이면 복습 간격을 1일 → 3일 → 이후 이전 간격의 약 2.2배씩 늘리고,
- * 40점 이하(틀림)면 간격을 0으로 되돌려 바로 다시 봐야 하는 상태로 만든다. 세션 내에서
- * 틀린 단어를 몇 번 더 재출제할지는 이 SRS 간격과 무관하게 queue.ts의 requeuePosition이
- * 따로 처리한다(간격 반복은 "오늘/다음에 또 볼지"를 정하고, requeue는 "이번 세션 안에서
- * 언제 다시 만날지"를 정한다).
+ * 방금 채점한 점수로부터 다음 SRS 상태를 계산한다. next_review_at이 지나기 전까지는
+ * prioritizeByMastery의 NOT_DUE_PUSH가 이 단어를 뒤로 미뤄두므로, "오늘 채점한 단어는
+ * 오늘 안에는 평소 스택 위치 그대로 있다가, 정해진 날짜가 되면 다시 큐 위쪽(낮은 점수는
+ * 원래 우선순위가 높음)으로 올라온다"는 동작이 별도 로직 없이 자연히 만들어진다.
+ * 세션 내에서 틀린 단어를 몇 번 더 재출제할지는 이 SRS 간격과 무관하게 queue.ts의
+ * requeuePosition이 따로 처리한다(간격 반복은 "며칠 뒤에 또 볼지"를 정하고, requeue는
+ * "이번 세션 안에서 언제 다시 만날지"를 정한다).
  */
 export function computeNextMastery(prev: MasteryInfo | undefined, score: ScoreLevel): MasteryInfo {
   const wrongCount = score < 60 ? (prev?.wrongCount ?? 0) + 1 : (prev?.wrongCount ?? 0);
-  let repetition = prev?.repetition ?? 0;
-  let intervalDays = prev?.intervalDays ?? 0;
-  if (score >= 60) {
-    repetition += 1;
-    intervalDays = repetition === 1 ? 1 : repetition === 2 ? 3 : Math.min(60, Math.round(intervalDays * 2.2));
-  } else {
-    repetition = 0;
-    intervalDays = 0;
-  }
+  const repetition = score >= 60 ? (prev?.repetition ?? 0) + 1 : 0;
+  const intervalDays = FIXED_INTERVAL_DAYS[score];
   const nextReviewAt = new Date(Date.now() + intervalDays * 24 * 60 * 60 * 1000).toISOString();
   return { score, wrongCount, repetition, intervalDays, nextReviewAt };
 }

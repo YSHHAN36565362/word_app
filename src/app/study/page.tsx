@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import FileSelector from "@/components/FileSelector";
 import ExitFocusButton from "@/components/ExitFocusButton";
@@ -187,13 +188,18 @@ export default function StudyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
 
+  const revealHint = () => {
+    if (words[index]?.hint.trim()) setShowHint(true);
+  };
   useKeyboardShortcuts(
     {
       ArrowRight: () => next(),
       ArrowLeft: () => prev(),
-      h: () => {
-        if (words[index]?.hint.trim()) setShowHint(true);
-      },
+      // h는 한글/일본어 자판일 때 e.key가 "h"로 안 잡혀서 안 먹힐 수 있다 — KeyH(물리
+      // 키 코드, 자판과 무관)와 Space를 대안으로 추가해 항상 힌트를 열 수 있게 한다.
+      h: revealHint,
+      KeyH: revealHint,
+      " ": revealHint,
     },
     focus && !done
   );
@@ -222,10 +228,17 @@ export default function StudyPage() {
                 이전
                 <KeyBadge>←</KeyBadge>
               </button>
-              <button onClick={() => setShowHint(true)} disabled={!current.hint.trim()} className="btn-3d btn-ghost text-sm">
+              <motion.button
+                key={index}
+                onClick={() => setShowHint(true)}
+                disabled={!current.hint.trim()}
+                className="btn-3d btn-amber text-sm"
+                animate={!showHint && current.hint.trim() ? { y: [0, -9, 0] } : undefined}
+                transition={{ duration: 0.6, ease: "easeOut", delay: 0.35 }}
+              >
                 힌트
-                <KeyBadge>H</KeyBadge>
-              </button>
+                <KeyBadge>H/Space</KeyBadge>
+              </motion.button>
               <button onClick={next} className="btn-3d btn-accent text-sm">
                 다음
                 <KeyBadge>→</KeyBadge>
@@ -307,7 +320,7 @@ export default function StudyPage() {
         subtitle="단어를 순서대로 넘기며 훑어보는 1회독입니다."
       />
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-        단축키: ←/→=이전/다음 단어 · H=힌트 보기
+        단축키: ←/→=이전/다음 단어 · H/Space=힌트 보기
       </p>
 
       {ready && !userId && (

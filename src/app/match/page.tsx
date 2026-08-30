@@ -29,11 +29,19 @@ interface Tile {
   text: string;
 }
 
-function buildTiles(words: WordEntry[]): Tile[] {
+// 단어장 뜻에는 보통 "조립하다(くみたてる)"처럼 괄호 안에 요미가나(히라가나)가 같이
+// 적혀 있다. 어려운 모드에서는 이 괄호 안 내용을 지워서, 히라가나만 보고 짝을
+// 맞히는 편법을 못 쓰고 순수하게 뜻만 보고 맞히게 한다.
+function stripReadingHint(meaning: string): string {
+  return meaning.replace(/[(（][^)）]*[)）]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function buildTiles(words: WordEntry[], hard: boolean): Tile[] {
   const tiles: Tile[] = [];
   words.forEach((w, i) => {
     tiles.push({ id: `${i}-word`, pairId: i, kind: "word", text: w.word });
-    tiles.push({ id: `${i}-meaning`, pairId: i, kind: "meaning", text: w.meaning });
+    const meaning = hard ? stripReadingHint(w.meaning) || w.meaning : w.meaning;
+    tiles.push({ id: `${i}-meaning`, pairId: i, kind: "meaning", text: meaning });
   });
   return shuffle(tiles);
 }
@@ -58,6 +66,7 @@ export default function MatchPage() {
   const [finished, setFinished] = useState(false);
   const [newRecord, setNewRecord] = useState(false);
   const [fileKey, setFileKey] = useState("");
+  const [hardMode, setHardMode] = useState(false);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -69,8 +78,9 @@ export default function MatchPage() {
   }, [ready, userId, selectedFiles]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  async function begin() {
+  async function begin(hard: boolean) {
     if (selectedFiles.length === 0) return;
+    setHardMode(hard);
     setStarting(true);
     const paths = selectedFiles.map((f) => f.path);
     const list = await fetchWords(paths);
@@ -78,7 +88,7 @@ export default function MatchPage() {
     if (list.length === 0) return;
     const picked = shuffle(list).slice(0, Math.min(PAIR_COUNT, list.length));
     setPairTotal(picked.length);
-    setTiles(buildTiles(picked));
+    setTiles(buildTiles(picked, hard));
     setMatchedPairIds(new Set());
     setSelected([]);
     setWrongPair([]);
@@ -167,8 +177,8 @@ export default function MatchPage() {
                 최고 기록 {formatMs(Math.min(bestMs, elapsedMs))}
               </div>
             )}
-            <button onClick={begin} className="btn-3d btn-accent mt-4 w-full">
-              같은 조합으로 다시하기
+            <button onClick={() => begin(hardMode)} className="btn-3d btn-accent mt-4 w-full">
+              같은 조합으로 다시하기 ({hardMode ? "어려운 모드" : "쉬운 모드"})
             </button>
           </div>
         ) : (
@@ -242,16 +252,28 @@ export default function MatchPage() {
         </div>
       )}
 
-      <button onClick={begin} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-purple mt-5 w-full">
-        {starting ? (
-          <>
-            <Spinner size={16} className="mr-2" />
-            불러오는 중...
-          </>
-        ) : (
-          `매칭 게임 시작 (${PAIR_COUNT}쌍)`
-        )}
-      </button>
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <button onClick={() => begin(false)} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-purple w-full">
+          {starting && !hardMode ? (
+            <>
+              <Spinner size={16} className="mr-2" />
+              불러오는 중...
+            </>
+          ) : (
+            `쉬운 매칭 게임 시작 (${PAIR_COUNT}쌍)`
+          )}
+        </button>
+        <button onClick={() => begin(true)} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-red w-full">
+          {starting && hardMode ? (
+            <>
+              <Spinner size={16} className="mr-2" />
+              불러오는 중...
+            </>
+          ) : (
+            `어려운 매칭 게임 시작 (${PAIR_COUNT}쌍)`
+          )}
+        </button>
+      </div>
     </div>
   );
 }

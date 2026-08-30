@@ -21,7 +21,7 @@ import { fetchWords } from "@/lib/api";
 import { getDisplaySide, shuffle, wordKey } from "@/lib/queue";
 import { addWordsToWrongNotes, appendStudyStat, deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
 import { computeNextMastery, loadAllMastery, MasteryInfo, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
-import { ExamProgress, FileRef, StudyMode, WordEntry } from "@/lib/types";
+import { ExamProgress, FileRef, isItSelection, StudyMode, WordEntry } from "@/lib/types";
 
 export default function ExamPage() {
   const { focus, setFocus } = useFocusMode();
@@ -422,10 +422,10 @@ export default function ExamPage() {
 
           <div className="mt-4 grid grid-cols-3 gap-2">
             <button onClick={() => begin("word_only")} disabled={availableWords.length === 0} className="btn-3d btn-accent text-sm">
-              이름만 시험
+              {isItSelection(selectedFiles) ? "이름만 시험" : "한자 맞추기 시험"}
             </button>
             <button onClick={() => begin("meaning_only")} disabled={availableWords.length === 0} className="btn-3d btn-accent text-sm">
-              뜻만 시험
+              {isItSelection(selectedFiles) ? "뜻만 시험" : "한자 뜻 맞추기 시험"}
             </button>
             <button onClick={() => begin("random")} disabled={availableWords.length === 0} className="btn-3d btn-accent text-sm">
               랜덤 시험
