@@ -56,6 +56,9 @@ alter table word_mastery add column if not exists wrong_count int not null defau
 alter table word_mastery add column if not exists repetition int not null default 0;
 alter table word_mastery add column if not exists interval_days int not null default 0;
 alter table word_mastery add column if not exists next_review_at timestamptz;
+-- unknown_count: wrong_count와 달리 "모름(0)"으로만 채점된 누적 횟수(헷갈림은 안 셈).
+-- 5회 이상이면 "연습 복습"(자주 틀리는 단어만 모아보는 가벼운 화면)에 노출한다.
+alter table word_mastery add column if not exists unknown_count int not null default 0;
 
 create index if not exists word_mastery_user_id_idx on word_mastery (user_id);
 create index if not exists word_mastery_review_idx on word_mastery (user_id, next_review_at);

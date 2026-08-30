@@ -22,7 +22,7 @@ import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { fetchWords } from "@/lib/api";
-import { getDisplaySide, requeuePosition, shuffle, wordKey } from "@/lib/queue";
+import { getDisplaySide, requeuePosition, ROUND_SIZE, shuffle, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, loadProgress, loadWrongNotes, saveProgress } from "@/lib/progress";
 import { computeNextMastery, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
@@ -33,10 +33,10 @@ const WRONG_NOTES_PATH_KEY = "__wrong_notes__";
 const FAVORITES_PATH_KEY = "__favorites__";
 const REVIEW_PATH_KEY = "__review__";
 const DUE_REVIEW_PATH_KEY = "__due_review__";
-// 마이크로 러닝: 한 번에 몰아서 외우게 하지 않고 15개 단위 "라운드"로 쪼갠다. 라운드를
-// 마칠 때마다 짧은 결과 화면을 보여줘서 큰 대기열(수백 개) 앞에서도 매번 작은 목표만
-// 보게 한다. 3~4번째 요구사항(마이크로 러닝, 진행률 바)이 여기서 같이 맞물린다.
-const ROUND_SIZE = 15;
+// 마이크로 러닝: 한 번에 몰아서 외우게 하지 않고 ROUND_SIZE(queue.ts) 단위 "라운드"로
+// 쪼갠다. 라운드를 마칠 때마다 짧은 결과 화면을 보여줘서 큰 대기열(수백 개) 앞에서도
+// 매번 작은 목표만 보게 한다. requeuePosition도 이 라운드 크기를 기준으로 모름/헷갈림을
+// 몇 라운드 뒤에 다시 보여줄지 정하므로, 값 자체는 queue.ts에서 가져와 공유한다.
 // 이 이상 헷갈림/모름으로 채점된 단어는 "자주 틀리는 단어" 배지를 붙인다.
 const FREQUENTLY_WRONG_THRESHOLD = 3;
 
@@ -272,6 +272,10 @@ function PracticePageInner() {
   // 같은 조합을 여러 번 반복하다 보면 내용이 아니라 "다음에 뭐가 나올지" 순서로
   // 외워버릴 수 있어서, 진행 중에도 원하면 순서를 바꿀 수 있게 한다.
   function shuffleQueue() {
+    // 이제 큐 순서 자체가 "모름은 이번 라운드 안에, 헷갈림은 몇 라운드 뒤에" 같은
+    // 의미를 담고 있어서, 섞으면 그 순서(스택)가 흐트러진다 — 실수로 누르지 않도록
+    // 확인을 한 번 받는다.
+    if (!window.confirm("단어를 섞으시겠습니까?\n모름/헷갈림 단어가 다시 나올 순서가 흐트러질 수 있어요.")) return;
     setQueue((prev) => {
       const next = shuffle(prev);
       persist({ queue: next, current, total, done: doneCount, side: displaySide, m: mode, labels: filesLabel, paths: activeFilePaths });
@@ -537,12 +541,22 @@ function PracticePageInner() {
 
   return (
     <div className="mx-auto max-w-xl px-4 pt-6 pb-8">
-      <PageHeader
-        icon="연"
-        accent="var(--blue)"
-        title="연습 파트"
-        subtitle="망각 곡선 큐 적용. 4단계로 스스로 채점하면 모르는 단어일수록 더 빨리 다시 만납니다."
-      />
+      <div className="flex items-start justify-between gap-3">
+        <PageHeader
+          icon="연"
+          accent="var(--blue)"
+          title="연습 파트"
+          subtitle="망각 곡선 큐 적용. 4단계로 스스로 채점하면 모르는 단어일수록 더 빨리 다시 만납니다."
+        />
+        {userId && (
+          <Link
+            href="/practice/frequent"
+            className="btn-3d btn-red shrink-0 px-3 py-1.5 text-xs whitespace-nowrap"
+          >
+            연습 복습
+          </Link>
+        )}
+      </div>
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
         단축키: Space/Enter=정답 확인 · 1~4=모름·헷갈림·조금앎·완벽함 · ↑/W/Num8=완벽함 ·
         ↓/S/Num2=모름 · ←/A/Num4=조금앎 · →/D/Num6=헷갈림

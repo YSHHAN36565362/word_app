@@ -9,6 +9,7 @@ const UNSEEN_PRIORITY = 50; // 한 번도 채점 기록이 없는 단어. 0/40(�
 export interface MasteryInfo {
   score: number; // 가장 최근 채점 점수 (0/40/60/100)
   wrongCount: number; // 지금까지 헷갈림(40)·모름(0)으로 채점된 누적 횟수 — "자주 틀리는 단어" 배지에 쓴다.
+  unknownCount: number; // 지금까지 모름(0)으로만 채점된 누적 횟수 — "연습 복습" 노출 기준.
   intervalDays: number; // SRS(간격 반복) 다음 복습까지의 간격(일)
   repetition: number; // 연속으로 60점 이상 맞힌 횟수(틀리면 0으로 리셋)
   nextReviewAt: string | null; // 다음 복습 예정 시각(ISO). 아직 한 번도 채점 안 됐으면 null.
@@ -41,13 +42,14 @@ export async function loadAllMastery(userId: string): Promise<Map<string, Master
     if (!supabase) return map;
     const { data, error } = await supabase
       .from("word_mastery")
-      .select("word_key, score, wrong_count, interval_days, repetition, next_review_at")
+      .select("word_key, score, wrong_count, unknown_count, interval_days, repetition, next_review_at")
       .eq("user_id", userId);
     if (error || !data) return map;
     for (const row of data as {
       word_key: string;
       score: number;
       wrong_count: number | null;
+      unknown_count: number | null;
       interval_days: number | null;
       repetition: number | null;
       next_review_at: string | null;
@@ -55,6 +57,7 @@ export async function loadAllMastery(userId: string): Promise<Map<string, Master
       map.set(row.word_key, {
         score: row.score,
         wrongCount: row.wrong_count ?? 0,
+        unknownCount: row.unknown_count ?? 0,
         intervalDays: row.interval_days ?? 0,
         repetition: row.repetition ?? 0,
         nextReviewAt: row.next_review_at ?? null,
@@ -92,10 +95,11 @@ const FIXED_INTERVAL_DAYS: Record<ScoreLevel, number> = {
  */
 export function computeNextMastery(prev: MasteryInfo | undefined, score: ScoreLevel): MasteryInfo {
   const wrongCount = score < 60 ? (prev?.wrongCount ?? 0) + 1 : (prev?.wrongCount ?? 0);
+  const unknownCount = score === 0 ? (prev?.unknownCount ?? 0) + 1 : (prev?.unknownCount ?? 0);
   const repetition = score >= 60 ? (prev?.repetition ?? 0) + 1 : 0;
   const intervalDays = FIXED_INTERVAL_DAYS[score];
   const nextReviewAt = new Date(Date.now() + intervalDays * 24 * 60 * 60 * 1000).toISOString();
-  return { score, wrongCount, repetition, intervalDays, nextReviewAt };
+  return { score, wrongCount, unknownCount, repetition, intervalDays, nextReviewAt };
 }
 
 /** 채점 직후 그 단어의 최신 SRS 상태를 저장한다. 실패해도 학습 흐름은 막지 않는다(fire-and-forget로 호출). */
@@ -121,6 +125,7 @@ export async function saveWordMastery(userId: string, word: WordEntry, info: Mas
           meaning: word.meaning,
           hint: word.hint,
           wrong_count: info.wrongCount,
+          unknown_count: info.unknownCount,
           interval_days: info.intervalDays,
           repetition: info.repetition,
           next_review_at: info.nextReviewAt,
@@ -171,6 +176,26 @@ export async function loadDueReviewWords(userId: string): Promise<WordEntry[]> {
     .lte("next_review_at", nowIso)
     .not("word", "is", null)
     .order("next_review_at", { ascending: true })
+    .limit(200);
+  if (error || !data) return [];
+  return data as WordEntry[];
+}
+
+/**
+ * "모름(0)"으로 threshold번 이상 채점된, 유독 안 외워지는 단어만 모아 돌려준다.
+ * "연습 복습" 화면(한자만 보고 탭하면 뜻이 나오는 아주 가벼운 복습용)에서 사용한다.
+ */
+export async function loadFrequentlyUnknownWords(userId: string, threshold = 5): Promise<WordEntry[]> {
+  if (!userId) return [];
+  const supabase = await getSupabaseAsync();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("word_mastery")
+    .select("word, meaning, hint")
+    .eq("user_id", userId)
+    .gte("unknown_count", threshold)
+    .not("word", "is", null)
+    .order("unknown_count", { ascending: false })
     .limit(200);
   if (error || !data) return [];
   return data as WordEntry[];
