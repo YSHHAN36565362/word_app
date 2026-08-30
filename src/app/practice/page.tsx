@@ -638,10 +638,10 @@ function PracticePageInner() {
 
       <div className="mt-5 grid grid-cols-3 gap-2">
         <button onClick={() => begin("word_only")} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
-          {starting ? <Spinner size={14} /> : "이름만"}
+          {starting ? <Spinner size={14} /> : isItSelection(selectedFiles) ? "이름만" : "한자 맞추기"}
         </button>
         <button onClick={() => begin("meaning_only")} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
-          {starting ? <Spinner size={14} /> : "뜻만"}
+          {starting ? <Spinner size={14} /> : isItSelection(selectedFiles) ? "뜻만" : "한자 뜻 맞추기"}
         </button>
         <button onClick={() => begin("random")} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
           {starting ? <Spinner size={14} /> : "랜덤"}
