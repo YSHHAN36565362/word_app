@@ -7,12 +7,12 @@ import { usePathname } from "next/navigation";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 
 const TABS = [
-  { href: "/study", label: "학습", icon: "/images/study.jpeg" },
-  { href: "/practice", label: "연습", icon: "/images/practice.jpeg" },
-  { href: "/match", label: "매칭게임", icon: "/images/match.jpeg" },
-  { href: "/exam", label: "시험", icon: "/images/test.png" },
-  { href: "/wrongnotes", label: "오답노트", icon: "/images/note.jpeg" },
-  { href: "/more", label: "설정", icon: "/images/setting.jpeg" },
+  { href: "/study", label: "학습", icon: "/images/study.jpeg", tour: "nav-study" },
+  { href: "/practice", label: "연습", icon: "/images/practice.jpeg", tour: "nav-practice" },
+  { href: "/match", label: "매칭게임", icon: "/images/match.jpeg", tour: "nav-match" },
+  { href: "/exam", label: "시험", icon: "/images/test.png", tour: "nav-exam" },
+  { href: "/wrongnotes", label: "오답노트", icon: "/images/note.jpeg", tour: "nav-wrongnotes" },
+  { href: "/more", label: "설정", icon: "/images/setting.jpeg", tour: "nav-settings" },
 ] as const;
 
 // 하단 탭이 있다는 걸 못 알아채는 사용자가 있어서, 아이콘이 한 번에 하나씩 순서대로
@@ -40,6 +40,7 @@ export default function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
+              data-tour={tab.tour}
               className="flex flex-1 flex-col items-center gap-1 rounded-xl py-1.5 text-xs font-bold transition-colors"
               style={{ color: active ? "var(--accent)" : "var(--text-muted)" }}
             >

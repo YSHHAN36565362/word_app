@@ -219,11 +219,22 @@ export default function Home() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.95 }}
       >
-        <Link href="/study" className="btn-3d btn-accent">
+        <Link href="/study" data-tour="home-study" className="btn-3d btn-accent">
           학습 시작하기
         </Link>
         <Link href="/practice" className="btn-3d btn-blue">
           練習行こう
+        </Link>
+      </motion.div>
+
+      <motion.div
+        className="mt-3 w-full"
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.05 }}
+      >
+        <Link href="/more/guide" className="btn-3d btn-ghost w-full text-sm">
+          처음 시작하기
         </Link>
       </motion.div>
     </div>

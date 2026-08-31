@@ -1,5 +1,6 @@
 import PageHeader from "@/components/PageHeader";
 import UsageGuide from "@/components/UsageGuide";
+import StartTourButton from "@/components/StartTourButton";
 
 export default function GuidePage() {
   return (
@@ -10,6 +11,7 @@ export default function GuidePage() {
         title="사용법 설명"
         subtitle="처음 오셨다면 아래에서 파트별 기능과 편의 기능을 화면과 함께 확인해보세요."
       />
+      <StartTourButton />
       <UsageGuide />
     </div>
   );
