@@ -107,17 +107,52 @@ function PracticePageInner() {
   // 켜둘 수 있어서(계정이 아니라) localStorage에만 저장한다 — ThemeContext와 같은
   // 이유로, SSR과 hydration이 어긋나지 않게 기본값 false로 먼저 그린 뒤 마운트 후
   // 저장된 값으로 갱신한다.
-  const [hideMascot, setHideMascot] = useState(false);
+  // 주의: 마운트 복원 effect와 "값이 바뀔 때마다 저장" effect를 따로 두면, 개발 모드의
+  // React StrictMode가 마운트 effect를 두 번 실행하면서 "복원되기 전(기본값)"의 값을
+  // 저장 effect가 먼저 storage에 덮어써 버려 복원 자체가 무효화되는 경우가 있었다
+  // (실제로 재현됨). 그래서 저장은 항상 "값을 바꾸는 시점"(토글/버튼 클릭)에 그 자리에서
+  // 하고, 마운트 effect는 상태만 복원할 뿐 storage에 다시 쓰지 않는다.
+  const [hideMascot, setHideMascotState] = useState(false);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
-    if (window.localStorage.getItem("word_app_practice_hide_mascot") === "1") setHideMascot(true);
+    if (window.localStorage.getItem("word_app_practice_hide_mascot") === "1") setHideMascotState(true);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
+  function setHideMascot(next: boolean) {
+    setHideMascotState(next);
+    window.localStorage.setItem("word_app_practice_hide_mascot", next ? "1" : "0");
+  }
+
+  // 데스크탑/노트북에서는 브라우저 확대 없이는 한자·설명 글씨가 작게 느껴진다는
+  // 피드백이 있어서 카드 글자 크기를 사용자가 직접 조절할 수 있게 한다. "그 세션
+  // 동안"만 유지하면 되므로(기기마다 새로 정하면 됨) sessionStorage에 저장한다 —
+  // 탭을 닫으면 초기화되고, 같은 탭 안에서 새로고침하거나 다른 파트로 갔다와도 유지된다.
+  // (저장 시점을 값이 바뀌는 자리로 두는 이유는 위 hideMascot 주석과 동일.)
+  const FONT_SCALE_MIN = 0.8;
+  const FONT_SCALE_MAX = 1.8;
+  const [fontScale, setFontScaleState] = useState(1);
+
   useEffect(() => {
-    window.localStorage.setItem("word_app_practice_hide_mascot", hideMascot ? "1" : "0");
-  }, [hideMascot]);
+    /* eslint-disable react-hooks/set-state-in-effect */
+    const stored = Number(window.sessionStorage.getItem("word_app_practice_font_scale"));
+    if (stored >= FONT_SCALE_MIN && stored <= FONT_SCALE_MAX) {
+      setFontScaleState(stored);
+      document.documentElement.style.setProperty("--practice-font-scale", String(stored));
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
+  function setFontScale(next: number) {
+    setFontScaleState(next);
+    window.sessionStorage.setItem("word_app_practice_font_scale", String(next));
+    document.documentElement.style.setProperty("--practice-font-scale", String(next));
+  }
+
+  function adjustFontScale(delta: number) {
+    setFontScale(Math.round(Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, fontScale + delta)) * 10) / 10);
+  }
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -480,7 +515,38 @@ function PracticePageInner() {
           </div>
         ) : !finished && current ? (
           <div className="mt-3">
-            <div className="mb-1.5 flex items-center justify-end gap-1">
+            <div className="mb-1.5 flex items-center justify-end gap-1.5">
+              <div className="flex items-center gap-1 mr-1">
+                <button
+                  onClick={() => adjustFontScale(-0.1)}
+                  disabled={fontScale <= FONT_SCALE_MIN}
+                  aria-label="글자 작게"
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold disabled:opacity-40"
+                  style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
+                >
+                  −
+                </button>
+                <span className="w-8 text-center text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>
+                  {Math.round(fontScale * 100)}%
+                </span>
+                <button
+                  onClick={() => adjustFontScale(0.1)}
+                  disabled={fontScale >= FONT_SCALE_MAX}
+                  aria-label="글자 크게"
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold disabled:opacity-40"
+                  style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
+                >
+                  +
+                </button>
+                <button
+                  onClick={() => setFontScale(1)}
+                  aria-label="글자 크기 기본값"
+                  className="flex h-6 items-center justify-center rounded-full px-2 text-[11px] font-bold"
+                  style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
+                >
+                  기본값
+                </button>
+              </div>
               <SpeakButton text={current.word} compact />
               <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
                 {favorites.has(wordKey(current)) ? "★" : "☆"}
@@ -489,7 +555,11 @@ function PracticePageInner() {
             <FlashCard
               key={turnId}
               flipped={showAnswer}
-              front={<div className="text-2xl font-extrabold text-center">{qText}</div>}
+              front={
+                <div className="text-center font-extrabold" style={{ fontSize: "calc(1.5rem * var(--practice-font-scale, 1))" }}>
+                  {qText}
+                </div>
+              }
               back={
                 <div className="flex flex-col items-center gap-2">
                   {wrongCount >= FREQUENTLY_WRONG_THRESHOLD && (
@@ -500,16 +570,22 @@ function PracticePageInner() {
                       자주 틀리는 단어 · {wrongCount}회
                     </span>
                   )}
-                  <div className="text-lg font-bold text-center" style={{ color: "var(--text-muted)" }}>
+                  <div
+                    className="text-center font-bold"
+                    style={{ color: "var(--text-muted)", fontSize: "calc(1.125rem * var(--practice-font-scale, 1))" }}
+                  >
                     {qText}
                   </div>
-                  <div className="text-2xl font-extrabold text-center" style={{ color: "var(--accent-dark)" }}>
+                  <div
+                    className="text-center font-extrabold"
+                    style={{ color: "var(--accent-dark)", fontSize: "calc(1.5rem * var(--practice-font-scale, 1))" }}
+                  >
                     {aText}
                   </div>
                   {showHint && current.hint.trim() && (
                     <div
-                      className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
-                      style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
+                      className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 leading-relaxed whitespace-pre-line"
+                      style={{ background: "var(--hint-bg)", color: "var(--text-muted)", fontSize: "calc(0.875rem * var(--practice-font-scale, 1))" }}
                     >
                       <HintText text={current.hint} />
                     </div>
