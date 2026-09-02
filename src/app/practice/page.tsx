@@ -19,10 +19,12 @@ import SpeakButton from "@/components/SpeakButton";
 import MemoPad from "@/components/MemoPad";
 import HintText from "@/components/HintText";
 import FontSizeControl from "@/components/FontSizeControl";
+import ScoreButtonSizeControl from "@/components/ScoreButtonSizeControl";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { useFontScale } from "@/hooks/useFontScale";
+import { useScoreButtonPrefs } from "@/hooks/useScoreButtonPrefs";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, ROUND_SIZE, shuffle, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
@@ -141,6 +143,11 @@ function PracticePageInner() {
   // 피드백이 있어서 카드 글자 크기를 사용자가 직접 조절할 수 있게 한다(학습/시험/
   // 지문 파트도 동일한 훅을 쓴다 — src/hooks/useFontScale.ts 참고).
   const { fontScale, setFontScale, adjustFontScale } = useFontScale("word_app_practice_font_scale", "--practice-font-scale");
+
+  // 데스크탑을 대형 TV에 연결해서 쓸 때 채점 버튼(완벽함/조금 앎/헷갈림/모름)이 너무
+  // 크게 보인다는 요청으로, 톱니바퀴 버튼을 누르면 펼쳐지는 작은 팝오버로 크기를
+  // 줄이거나 아예 숨길 수 있게 한다(src/hooks/useScoreButtonPrefs.ts 참고).
+  const { scale: scoreBtnScale, setScale: setScoreBtnScale, adjustScale: adjustScoreBtnScale, hidden: scoreBtnsHidden, setHidden: setScoreBtnsHidden } = useScoreButtonPrefs();
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -514,23 +521,43 @@ function PracticePageInner() {
                 <KeyBadge>Space</KeyBadge>
               </button>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => score(100)} className="btn-3d btn-accent">
-                  완벽함 (100 · 7일 후)
-                  <KeyBadge>4 · ↑ · W · Num8</KeyBadge>
-                </button>
-                <button onClick={() => score(60)} className="btn-3d btn-blue">
-                  조금 앎 (60 · 3일 후)
-                  <KeyBadge>3 · ← · A · Num4</KeyBadge>
-                </button>
-                <button onClick={() => score(40)} className="btn-3d btn-amber">
-                  헷갈림 (40 · 잠시 후 다시)
-                  <KeyBadge>2 · → · D · Num6</KeyBadge>
-                </button>
-                <button onClick={() => score(0)} className="btn-3d btn-red">
-                  모름 (0 · 곧 다시)
-                  <KeyBadge>1 · ↓ · S · Num2</KeyBadge>
-                </button>
+              <div>
+                <div className="mb-1 flex justify-end">
+                  <ScoreButtonSizeControl
+                    scale={scoreBtnScale}
+                    onAdjust={adjustScoreBtnScale}
+                    onReset={() => setScoreBtnScale(1)}
+                    hidden={scoreBtnsHidden}
+                    onSetHidden={setScoreBtnsHidden}
+                  />
+                </div>
+                {scoreBtnsHidden ? (
+                  <div
+                    className="rounded-2xl py-3 text-center text-xs font-bold"
+                    style={{ color: "var(--text-muted)", background: "var(--hint-bg)" }}
+                  >
+                    채점 버튼이 숨겨져 있어요 — 키보드 1~4 또는 방향키로 채점하세요
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3" style={{ transform: `scale(${scoreBtnScale})`, transformOrigin: "bottom center" }}>
+                    <button onClick={() => score(100)} className="btn-3d btn-accent">
+                      완벽함 (100 · 7일 후)
+                      <KeyBadge>4 · ↑ · W · Num8</KeyBadge>
+                    </button>
+                    <button onClick={() => score(60)} className="btn-3d btn-blue">
+                      조금 앎 (60 · 3일 후)
+                      <KeyBadge>3 · ← · A · Num4</KeyBadge>
+                    </button>
+                    <button onClick={() => score(40)} className="btn-3d btn-amber">
+                      헷갈림 (40 · 잠시 후 다시)
+                      <KeyBadge>2 · → · D · Num6</KeyBadge>
+                    </button>
+                    <button onClick={() => score(0)} className="btn-3d btn-red">
+                      모름 (0 · 곧 다시)
+                      <KeyBadge>1 · ↓ · S · Num2</KeyBadge>
+                    </button>
+                  </div>
+                )}
               </div>
             )
           ) : undefined
