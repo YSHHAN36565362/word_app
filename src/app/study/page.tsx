@@ -15,9 +15,11 @@ import Confetti from "@/components/Confetti";
 import SpeakButton from "@/components/SpeakButton";
 import MemoPad from "@/components/MemoPad";
 import HintText from "@/components/HintText";
+import FontSizeControl from "@/components/FontSizeControl";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
+import { useFontScale } from "@/hooks/useFontScale";
 import { fetchWords } from "@/lib/api";
 import { shuffle, wordKey } from "@/lib/queue";
 import { deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
@@ -49,6 +51,7 @@ export default function StudyPage() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [activeFilePaths, setActiveFilePaths] = useState<string[]>([]);
   const [activeFileLabels, setActiveFileLabels] = useState<string[]>([]);
+  const { fontScale, setFontScale, adjustFontScale } = useFontScale("word_app_study_font_scale", "--study-font-scale");
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -248,26 +251,33 @@ export default function StudyPage() {
         }
       >
         {!done && current ? (
-          <div className="study-card mt-4 p-8 flex flex-col items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="text-2xl font-extrabold" style={{ color: "var(--blue)" }}>
-                {current.word}
-              </div>
-              <SpeakButton text={current.word} compact />
-              <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
-                {favorites.has(wordKey(current)) ? "★" : "☆"}
-              </button>
+          <>
+            <div className="mt-3 flex justify-end">
+              <FontSizeControl fontScale={fontScale} onAdjust={adjustFontScale} onReset={() => setFontScale(1)} />
             </div>
-            <div className="text-lg font-semibold text-center">{current.meaning}</div>
-            {showHint && current.hint.trim() && (
-              <div
-                className="hint-reveal w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
-                style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
-              >
-                <HintText text={current.hint} />
+            <div className="study-card mt-1.5 p-8 flex flex-col items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="text-center font-extrabold" style={{ color: "var(--blue)", fontSize: "calc(1.5rem * var(--study-font-scale, 1))" }}>
+                  {current.word}
+                </div>
+                <SpeakButton text={current.word} compact />
+                <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
+                  {favorites.has(wordKey(current)) ? "★" : "☆"}
+                </button>
               </div>
-            )}
-          </div>
+              <div className="text-center font-semibold" style={{ fontSize: "calc(1.125rem * var(--study-font-scale, 1))" }}>
+                {current.meaning}
+              </div>
+              {showHint && current.hint.trim() && (
+                <div
+                  className="hint-reveal w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 leading-relaxed whitespace-pre-line"
+                  style={{ background: "var(--hint-bg)", color: "var(--text-muted)", fontSize: "calc(0.875rem * var(--study-font-scale, 1))" }}
+                >
+                  <HintText text={current.hint} />
+                </div>
+              )}
+            </div>
+          </>
         ) : (
           <div className="study-card relative mt-10 p-8 text-center">
             {done && <Confetti />}

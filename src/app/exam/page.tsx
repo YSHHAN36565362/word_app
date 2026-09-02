@@ -14,9 +14,11 @@ import PageHeader from "@/components/PageHeader";
 import Confetti from "@/components/Confetti";
 import FeedbackFlash from "@/components/FeedbackFlash";
 import HintText from "@/components/HintText";
+import FontSizeControl from "@/components/FontSizeControl";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
+import { useFontScale } from "@/hooks/useFontScale";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, shuffle, wordKey } from "@/lib/queue";
 import { addWordsToWrongNotes, appendStudyStat, deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
@@ -52,6 +54,7 @@ export default function ExamPage() {
   const [turnId, setTurnId] = useState(0);
   const [flashKey, setFlashKey] = useState(0);
   const [flashColor, setFlashColor] = useState<string | null>(null);
+  const { fontScale, setFontScale, adjustFontScale } = useFontScale("word_app_exam_font_scale", "--exam-font-scale");
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -291,22 +294,35 @@ export default function ExamPage() {
       >
         {!finished && current ? (
           <div className="mt-3">
+            <div className="mb-1.5 flex justify-end">
+              <FontSizeControl fontScale={fontScale} onAdjust={adjustFontScale} onReset={() => setFontScale(1)} />
+            </div>
             <FlashCard
               key={turnId}
               flipped={showAnswer}
-              front={<div className="text-2xl font-extrabold text-center">{qText}</div>}
+              front={
+                <div className="text-center font-extrabold" style={{ fontSize: "calc(1.5rem * var(--exam-font-scale, 1))" }}>
+                  {qText}
+                </div>
+              }
               back={
                 <div className="flex flex-col items-center gap-2">
-                  <div className="text-lg font-bold text-center" style={{ color: "var(--text-muted)" }}>
+                  <div
+                    className="text-center font-bold"
+                    style={{ color: "var(--text-muted)", fontSize: "calc(1.125rem * var(--exam-font-scale, 1))" }}
+                  >
                     {qText}
                   </div>
-                  <div className="text-2xl font-extrabold text-center" style={{ color: "var(--accent-dark)" }}>
+                  <div
+                    className="text-center font-extrabold"
+                    style={{ color: "var(--accent-dark)", fontSize: "calc(1.5rem * var(--exam-font-scale, 1))" }}
+                  >
                     {aText}
                   </div>
                   {current.hint.trim() && (
                     <div
-                      className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line"
-                      style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}
+                      className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 leading-relaxed whitespace-pre-line"
+                      style={{ background: "var(--hint-bg)", color: "var(--text-muted)", fontSize: "calc(0.875rem * var(--exam-font-scale, 1))" }}
                     >
                       <HintText text={current.hint} />
                     </div>

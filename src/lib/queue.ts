@@ -60,3 +60,15 @@ export function shuffle<T>(arr: T[]): T[] {
 export function wordKey(w: WordEntry): string {
   return `${w.word}|${w.meaning}|${w.hint}`;
 }
+
+/**
+ * 원본 단어장 파일에 같은 단어(같은 word/meaning/hint)가 두 번 이상 등재돼 있으면,
+ * 큐에도 별개의 카드로 두 번 이상 들어간다. 방금 완벽함/조금 앎으로 "이제 안다"고
+ * 답한 단어의 다른 사본이 큐에 남아 있으면, 몇 장 뒤(심하면 바로 다음 장)에 똑같은
+ * 카드를 또 물어보게 되어 "완벽함을 눌렀는데 바로 다음에 또 나온다"는 문제로
+ * 이어진다. 채점 직후 같은 key를 가진 나머지 사본을 큐에서 모두 제거해 이를 막는다.
+ */
+export function withoutKey<T extends WordEntry>(queue: T[], key: string): { queue: T[]; removed: number } {
+  const kept = queue.filter((w) => wordKey(w) !== key);
+  return { queue: kept, removed: queue.length - kept.length };
+}

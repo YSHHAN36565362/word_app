@@ -138,25 +138,38 @@ export async function saveWordMastery(userId: string, word: WordEntry, info: Mas
   return run;
 }
 
+/** loadMasteredWords가 돌려주는 항목 — 복습 화면에서 "완벽"/"조금 앎" 배지와
+ * 다음 복습 예정일을 보여주려면 원문 외에 채점 점수·SRS 상태도 함께 필요하다. */
+export interface MasteredWordEntry extends WordEntry {
+  score: number;
+  nextReviewAt: string | null;
+}
+
 /**
  * 완벽함(100)·조금 앎(60)으로 채점해 "잘 아는 단어"로 분류된 것들을 최근 순으로
  * 돌려준다. 설정의 "복습" 화면에서 사용한다. word_mastery에 원문(word/meaning/hint)이
  * 저장되기 전(이 기능 추가 이전)에 채점된 항목은 원문이 없어 목록에서 제외된다.
  */
-export async function loadMasteredWords(userId: string, minScore = 60): Promise<WordEntry[]> {
+export async function loadMasteredWords(userId: string, minScore = 60): Promise<MasteredWordEntry[]> {
   if (!userId) return [];
   const supabase = await getSupabaseAsync();
   if (!supabase) return [];
   const { data, error } = await supabase
     .from("word_mastery")
-    .select("word, meaning, hint")
+    .select("word, meaning, hint, score, next_review_at")
     .eq("user_id", userId)
     .gte("score", minScore)
     .not("word", "is", null)
     .order("updated_at", { ascending: false })
     .limit(500);
   if (error || !data) return [];
-  return data as WordEntry[];
+  return (data as { word: string; meaning: string; hint: string; score: number; next_review_at: string | null }[]).map((row) => ({
+    word: row.word,
+    meaning: row.meaning,
+    hint: row.hint,
+    score: row.score,
+    nextReviewAt: row.next_review_at,
+  }));
 }
 
 /**
@@ -218,33 +231,75 @@ export async function resetWordMastery(userId: string, word: WordEntry): Promise
 // 먼저 나온다"는 취지는 지키면서도 세션마다 눈에 띄게 다른 순서가 되게 한다.
 const PRIORITY_JITTER = 12;
 
-// 잘 아는 단어(60점 이상)인데 SRS 복습 예정일이 아직 안 지났다면, 이만큼 더 뒤로 민다.
-// 안키의 "learning steps(세션 내 재출제) vs review(날짜 기준 복습)" 구분과 비슷하게,
-// "아직 복습할 때가 안 된 단어"가 매 세션 앞자리를 차지하지 않도록 하기 위함이다.
-const NOT_DUE_PUSH = 30;
-
 /**
  * 이미 섞인(shuffle된) 목록을 받아, 점수가 낮은(모름/헷갈림) 단어가 앞쪽에 오도록
  * 정렬한다. 우선순위에 매번 새로운 무작위 지터를 더해서 정렬하므로, 인접 구간끼리는
- * 세션마다 순서가 달라지고 같은 구간 안에서는 원래(셔플된) 순서를 유지한다. 잘 아는
- * 단어 중에서도 SRS 복습일이 아직 안 된 것은 한 번 더 뒤로 밀어서, "오늘 복습할 때가
- * 된" 단어가 상대적으로 먼저 나오게 한다.
+ * 세션마다 순서가 달라지고 같은 구간 안에서는 원래(셔플된) 순서를 유지한다.
+ * SRS 복습일이 아직 안 된 단어를 어떻게 할지는 이 함수의 관심사가 아니다 — 세션을
+ * 시작하기 전에 excludeNotDue로 아예 걸러내고, 여기엔 "오늘 다룰 단어"만 넘긴다.
  */
 export function prioritizeByMastery<T extends WordEntry>(shuffled: T[], mastery: Map<string, MasteryInfo>): T[] {
-  const now = Date.now();
   return shuffled
     .map((w, i) => {
       const info = mastery.get(wordKey(w));
-      const notDueYet = !!info && info.nextReviewAt != null && new Date(info.nextReviewAt).getTime() > now;
-      return {
-        w,
-        i,
-        p:
-          (info?.score ?? UNSEEN_PRIORITY) +
-          (notDueYet ? NOT_DUE_PUSH : 0) +
-          (Math.random() * PRIORITY_JITTER * 2 - PRIORITY_JITTER),
-      };
+      return { w, i, p: (info?.score ?? UNSEEN_PRIORITY) + (Math.random() * PRIORITY_JITTER * 2 - PRIORITY_JITTER) };
     })
     .sort((a, b) => a.p - b.p || a.i - b.i)
     .map((x) => x.w);
+}
+
+export interface DueSplit<T> {
+  due: T[]; // 오늘 다룰 단어(안 본 단어 + 모름/헷갈림 + SRS 복습일이 지난 완벽함/조금 앎)
+  excludedMastered: number; // 완벽함(100)인데 아직 7일이 안 지나 제외한 개수
+  excludedLearned: number; // 조금 앎(60)인데 아직 3일이 안 지나 제외한 개수
+}
+
+/**
+ * 완벽함(100)·조금 앎(60)으로 채점된 단어 중 SRS 복습 예정일(nextReviewAt)이 아직
+ * 안 지난 것은 "오늘의 스택"에서 아예 제외한다.
+ *
+ * 예전에는 prioritizeByMastery가 이런 단어를 뒤로 미루기만 했다(NOT_DUE_PUSH) — 큰
+ * 단어장에서는 사실상 안 보이는 것과 비슷했지만, 단어 수가 적은 단어장에서는 여전히
+ * 같은 세션 안에 다시 나오거나(며칠 뒤가 아니라 "그날 바로") 밀어내는 정도가 부족해
+ * 바로 다음 카드로 또 나오는 경우가 있었다 — "완벽함을 눌러도 7일 후가 적용 안 되는 것
+ * 같다"는 제보의 원인. 이제는 세션을 시작하기 전에 이 함수로 완전히 걸러낸다.
+ *
+ * 다만 걸러낸 결과가 너무 적으면(< MIN_DUE_FLOOR) 그날 연습할 단어가 하나도 없어
+ * 세션을 아예 시작 못 하는 게 더 나쁜 경험이라, 그럴 때는 복습일이 가장 임박한
+ * 순서로 부족한 만큼만 다시 채워 넣는다(대신 excludedMastered/excludedLearned
+ * 카운트에는 그대로 반영해, 화면에서 "그래도 N개는 아직 복습일 전이지만 채웠다"는
+ * 걸 알 수 있게 한다 — 정확히는 UI에서 "복습일이 남았지만 부족해서 포함" 문구로 안내).
+ */
+const MIN_DUE_FLOOR = 5;
+
+export function excludeNotDue<T extends WordEntry>(list: T[], mastery: Map<string, MasteryInfo>): DueSplit<T> {
+  const now = Date.now();
+  const due: T[] = [];
+  const notDue: { w: T; info: MasteryInfo; nextReviewAt: number }[] = [];
+
+  for (const w of list) {
+    const info = mastery.get(wordKey(w));
+    const notDueYet = !!info && info.nextReviewAt != null && new Date(info.nextReviewAt).getTime() > now;
+    if (notDueYet) {
+      notDue.push({ w, info: info!, nextReviewAt: new Date(info!.nextReviewAt!).getTime() });
+    } else {
+      due.push(w);
+    }
+  }
+
+  let excludedMastered = notDue.filter((x) => x.info.score === 100).length;
+  let excludedLearned = notDue.filter((x) => x.info.score === 60).length;
+
+  if (due.length < MIN_DUE_FLOOR && notDue.length > 0) {
+    // 복습일이 가장 임박한(가까운) 것부터 부족한 만큼만 채운다.
+    notDue.sort((a, b) => a.nextReviewAt - b.nextReviewAt);
+    const need = Math.min(MIN_DUE_FLOOR - due.length, notDue.length);
+    for (let i = 0; i < need; i++) {
+      due.push(notDue[i].w);
+      if (notDue[i].info.score === 100) excludedMastered--;
+      else if (notDue[i].info.score === 60) excludedLearned--;
+    }
+  }
+
+  return { due, excludedMastered, excludedLearned };
 }

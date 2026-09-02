@@ -11,20 +11,23 @@ import { markTodayActive } from "./streak";
  * 서버 설정 전에도 앱 자체는 정상 동작하게 한다 (기존 Streamlit 앱과 동일한 철학).
  */
 
-// (user, part)별로 직전 저장/삭제가 끝난 뒤에만 다음 것을 보내도록 체인으로 묶는다.
-// 단어를 빠르게 넘길 때마다 saveProgress가 fire-and-forget으로 연달아 호출되는데,
-// 네트워크 응답이 보낸 순서와 다르게 도착하면 늦게 도착한 "이전" 응답이 방금 저장된
-// "최신" 진행 상황을 덮어써 진행이 되돌아가거나(연습/시험 이어하기가 옛 지점으로
-// 돌아감), 완료 후 deleteProgress로 지운 행을 뒤늦게 되살리는 문제가 있었다.
+// (user, part, fileKey)별로 직전 저장/삭제가 끝난 뒤에만 다음 것을 보내도록 체인으로
+// 묶는다. 단어를 빠르게 넘길 때마다 saveProgress가 fire-and-forget으로 연달아
+// 호출되는데, 네트워크 응답이 보낸 순서와 다르게 도착하면 늦게 도착한 "이전" 응답이
+// 방금 저장된 "최신" 진행 상황을 덮어써 진행이 되돌아가거나(연습/시험 이어하기가 옛
+// 지점으로 돌아감), 완료 후 deleteProgress로 지운 행을 뒤늦게 되살리는 문제가 있었다.
 const progressChains = new Map<string, Promise<void>>();
 
-function progressChainKey(userId: string, part: string): string {
-  return `${userId}::${part}`;
+function progressChainKey(userId: string, part: string, fileKey: string): string {
+  return `${userId}::${part}::${fileKey}`;
 }
 
-export async function saveProgress(userId: string, part: string, data: unknown): Promise<boolean> {
+// fileKey를 생략하면(기본값 "") 파트당 슬롯이 하나뿐이던 예전 방식 그대로 동작한다
+// (학습/시험/지문 파트가 이 방식을 그대로 씀). 연습 파트처럼 파일 조합별로 각각
+// "이어하기" 지점을 남기고 싶으면 fileKeyOf(paths) 값을 넘긴다.
+export async function saveProgress(userId: string, part: string, data: unknown, fileKey = ""): Promise<boolean> {
   if (!userId) return false;
-  const key = progressChainKey(userId, part);
+  const key = progressChainKey(userId, part, fileKey);
   const prior = progressChains.get(key) ?? Promise.resolve();
   let ok = false;
   const run = prior
@@ -37,7 +40,10 @@ export async function saveProgress(userId: string, part: string, data: unknown):
       markTodayActive(userId);
       const { error } = await supabase
         .from("progress")
-        .upsert({ user_id: userId, part, data, updated_at: new Date().toISOString() }, { onConflict: "user_id,part" });
+        .upsert(
+          { user_id: userId, part, file_key: fileKey, data, updated_at: new Date().toISOString() },
+          { onConflict: "user_id,part,file_key" }
+        );
       ok = !error;
     });
   progressChains.set(key, run);
@@ -45,7 +51,7 @@ export async function saveProgress(userId: string, part: string, data: unknown):
   return ok;
 }
 
-export async function loadProgress<T>(userId: string, part: string): Promise<T | null> {
+export async function loadProgress<T>(userId: string, part: string, fileKey = ""): Promise<T | null> {
   if (!userId) return null;
   const supabase = await getSupabaseAsync();
   if (!supabase) return null;
@@ -54,24 +60,54 @@ export async function loadProgress<T>(userId: string, part: string): Promise<T |
     .select("data")
     .eq("user_id", userId)
     .eq("part", part)
+    .eq("file_key", fileKey)
     .maybeSingle();
   if (error || !data) return null;
   return data.data as T;
 }
 
-export async function deleteProgress(userId: string, part: string): Promise<void> {
+export async function deleteProgress(userId: string, part: string, fileKey = ""): Promise<void> {
   if (!userId) return;
-  const key = progressChainKey(userId, part);
+  const key = progressChainKey(userId, part, fileKey);
   const prior = progressChains.get(key) ?? Promise.resolve();
   const run = prior
     .catch(() => {})
     .then(async () => {
       const supabase = await getSupabaseAsync();
       if (!supabase) return;
-      await supabase.from("progress").delete().eq("user_id", userId).eq("part", part);
+      await supabase.from("progress").delete().eq("user_id", userId).eq("part", part).eq("file_key", fileKey);
     });
   progressChains.set(key, run);
   await run;
+}
+
+export interface SavedProgressEntry<T> {
+  fileKey: string;
+  data: T;
+  updatedAt: string;
+}
+
+/**
+ * 이 파트에서 아직 안 끝낸(완료 시 deleteProgress로 지워지는) 진행 지점을 파일 조합별로
+ * 전부 최근 순으로 돌려준다. 연습 파트의 "이어서 연습하기" 목록에 쓴다.
+ */
+export async function listSavedProgress<T>(userId: string, part: string): Promise<SavedProgressEntry<T>[]> {
+  if (!userId) return [];
+  const supabase = await getSupabaseAsync();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("progress")
+    .select("file_key, data, updated_at")
+    .eq("user_id", userId)
+    .eq("part", part)
+    .order("updated_at", { ascending: false })
+    .limit(20);
+  if (error || !data) return [];
+  return (data as { file_key: string; data: T; updated_at: string }[]).map((r) => ({
+    fileKey: r.file_key,
+    data: r.data,
+    updatedAt: r.updated_at,
+  }));
 }
 
 export async function loadWrongNotes(userId: string): Promise<WordEntry[]> {

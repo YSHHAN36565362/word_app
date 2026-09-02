@@ -8,9 +8,11 @@ import FocusScreen from "@/components/FocusScreen";
 import ProgressBar from "@/components/ProgressBar";
 import KeyBadge from "@/components/KeyBadge";
 import PageHeader from "@/components/PageHeader";
+import FontSizeControl from "@/components/FontSizeControl";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
+import { useFontScale } from "@/hooks/useFontScale";
 import { fetchScriptLines } from "@/lib/api";
 import { deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
 import { FileRef, ScriptProgress } from "@/lib/types";
@@ -26,6 +28,7 @@ export default function ScriptPage() {
   const [lines, setLines] = useState<string[]>([]);
   const [index, setIndex] = useState(0);
   const [filesLabel, setFilesLabel] = useState<string[]>([]);
+  const { fontScale, setFontScale, adjustFontScale } = useFontScale("word_app_script_font_scale", "--script-font-scale");
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -110,11 +113,16 @@ export default function ScriptPage() {
         }
       >
         {!done ? (
-          <div className="study-card mt-4 p-8 min-h-[160px] flex items-center">
-            <p className="text-lg font-semibold leading-relaxed" style={{ color: "var(--blue)" }}>
-              {lines[index]}
-            </p>
-          </div>
+          <>
+            <div className="mt-3 flex justify-end">
+              <FontSizeControl fontScale={fontScale} onAdjust={adjustFontScale} onReset={() => setFontScale(1)} />
+            </div>
+            <div className="study-card mt-1.5 p-8 min-h-[160px] flex items-center">
+              <p className="font-semibold leading-relaxed" style={{ color: "var(--blue)", fontSize: "calc(1.125rem * var(--script-font-scale, 1))" }}>
+                {lines[index]}
+              </p>
+            </div>
+          </>
         ) : (
           <div className="study-card mt-10 p-8 text-center">
             <div className="text-lg font-bold" style={{ color: "var(--accent)" }}>

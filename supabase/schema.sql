@@ -12,6 +12,13 @@ create table if not exists progress (
   primary key (user_id, part)
 );
 
+-- 연습 파트는 파일 조합마다 각자 "이어하기" 지점을 남길 수 있어야 해서(예전엔 파트당
+-- 딱 한 슬롯이라 새 조합을 시작하면 이전 진행이 덮어써졌다), file_key를 기본키에
+-- 추가한다. 학습/시험/지문 파트는 지금처럼 file_key=''(빈 문자열) 한 슬롯만 쓴다.
+alter table progress add column if not exists file_key text not null default '';
+alter table progress drop constraint if exists progress_pkey;
+alter table progress add primary key (user_id, part, file_key);
+
 create table if not exists wrong_notes (
   user_id text primary key,
   words jsonb not null default '[]'::jsonb,
