@@ -30,7 +30,7 @@ import { useRoundSize } from "@/hooks/useRoundSize";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
-import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
+import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, resetWordMastery, saveWordMastery } from "@/lib/mastery";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, loadFavorites, removeFavorite } from "@/lib/favorites";
 import { FileRef, isItSelection, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
@@ -72,6 +72,27 @@ interface RestoreRequest {
   mode: StudyMode;
   /** true면 체크박스 복원 후 자동으로 연습을 시작한다. false면 체크박스/대시보드만 맞춰준다. */
   autoStart: boolean;
+}
+
+/**
+ * 방금 채점(score())하기 직전의 상태를 통째로 담아둔다 — "되돌리기"는 이 스냅샷 하나로
+ * 큐/진행률/집계뿐 아니라 서버에 반영된 숙련도(word_mastery)까지 채점 전 상태로 되돌린다.
+ * 한 단계만 되돌릴 수 있고(스냅샷을 쓰고 나면 비운다), 다음 채점이 일어나면 이 스냅샷은
+ * 그 채점 직전 상태로 덮어써진다.
+ */
+interface UndoSnapshot {
+  queue: WordEntry[];
+  current: WordEntry;
+  doneCount: number;
+  displaySide: 0 | 1;
+  showAnswer: boolean;
+  showHint: boolean;
+  tally: SessionTally;
+  mascotState: MascotState;
+  resultSaved: boolean;
+  finishedAt: number | null;
+  /** 채점 전 그 단어의 숙련도 — 없었으면(첫 채점이었으면) undefined. */
+  prevMasteryInfo: MasteryInfo | undefined;
 }
 
 function isStudyMode(v: string | null): v is StudyMode {
@@ -179,6 +200,9 @@ function PracticePageInner() {
   // 이번 세션에서 어떤 채점을 몇 번 했는지 — 끝났을 때 요약 화면에 쓴다.
   const [tally, setTally] = useState<SessionTally>(EMPTY_TALLY);
   const [finishedAt, setFinishedAt] = useState<number | null>(null);
+  // 방금 한 채점을 되돌릴 수 있는 스냅샷. 채점할 때마다 그 직전 상태로 새로 채워지고
+  // (한 단계만 되돌리기), 되돌리고 나면 다시 비운다.
+  const [lastUndo, setLastUndo] = useState<UndoSnapshot | null>(null);
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -288,6 +312,7 @@ function PracticePageInner() {
     setRoundGateOpen(false);
     setTally({ ...EMPTY_TALLY, startedAt: Date.now() });
     setFinishedAt(null);
+    setLastUndo(null);
     setFocus(true);
 
     persist({ queue: q, current: first, total: pool.length, done: 0, side, m: selectedMode, labels, paths });
@@ -338,6 +363,7 @@ function PracticePageInner() {
     // 요약은 "이어서 한 이번 구간" 기준으로 새로 센다.
     setTally({ ...EMPTY_TALLY, startedAt: Date.now() });
     setFinishedAt(null);
+    setLastUndo(null);
     setFocus(true);
   }
 
@@ -415,6 +441,22 @@ function PracticePageInner() {
 
   function score(level: 100 | 60 | 40 | 0) {
     if (!current) return;
+    // 채점으로 바꾸기 직전의 상태를 스냅샷으로 남겨둔다 — "되돌리기"가 이걸로 전부
+    // 되돌린다. 채점 버튼은 showAnswer===true일 때만 눌리므로 이 시점의 showAnswer는
+    // 항상 true지만, 명시적으로 캡처해둬야 되돌린 뒤에도 같은 상태로 복원된다.
+    const snapshot: UndoSnapshot = {
+      queue,
+      current,
+      doneCount,
+      displaySide,
+      showAnswer,
+      showHint,
+      tally,
+      mascotState,
+      resultSaved,
+      finishedAt,
+      prevMasteryInfo: mastery.get(wordKey(current)),
+    };
     let nextQueue = [...queue];
     let nextDone = doneCount;
     const key = wordKey(current);
@@ -467,9 +509,45 @@ function PracticePageInner() {
       return next;
     });
     if (crossedRound) setRoundGateOpen(true);
+    setLastUndo(snapshot);
 
     persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, labels: filesLabel, paths: activeFilePaths });
     if (userId) saveWordMastery(userId, current, nextInfo);
+  }
+
+  // 방금 채점을 되돌린다: 큐/진행률/집계를 스냅샷 상태로 복원하고, 서버(Supabase)의
+  // 그 단어 숙련도도 채점 전 값으로 되돌린다(처음 채점이었으면 아예 지운다) — misclick
+  // 한 번으로 실제 큐 위치와 SRS 간격까지 어긋나는 걸 막기 위함이다. 한 단계만 되돌릴
+  // 수 있어서, 쓰고 나면 스냅샷을 비운다.
+  function undoLastScore() {
+    if (!lastUndo) return;
+    const u = lastUndo;
+    setQueue(u.queue);
+    setCurrent(u.current);
+    setDoneCount(u.doneCount);
+    setDisplaySide(u.displaySide);
+    setShowAnswer(u.showAnswer);
+    setShowHint(u.showHint);
+    setTally(u.tally);
+    setMascotState(u.mascotState);
+    setResultSaved(u.resultSaved);
+    setFinishedAt(u.finishedAt);
+    setRoundGateOpen(false);
+    setTurnId((t) => t + 1);
+    setFlashColor(null);
+    setLastUndo(null);
+    setMastery((m) => {
+      const next = new Map(m);
+      if (u.prevMasteryInfo) next.set(wordKey(u.current), u.prevMasteryInfo);
+      else next.delete(wordKey(u.current));
+      return next;
+    });
+
+    persist({ queue: u.queue, current: u.current, total, done: u.doneCount, side: u.displaySide, m: mode, labels: filesLabel, paths: activeFilePaths });
+    if (userId) {
+      if (u.prevMasteryInfo) saveWordMastery(userId, u.current, u.prevMasteryInfo);
+      else resetWordMastery(userId, u.current);
+    }
   }
 
   const finished = focus && current === null && queue.length === 0 && total > 0;
@@ -524,6 +602,14 @@ function PracticePageInner() {
     // 라운드 완료 화면이 떠 있는 동안은 카드가 안 보이므로 단축키도 꺼둔다 — 안 그러면
     // "정답 확인"/채점 키를 눌렀을 때 화면에 없는 다음 라운드 첫 단어가 몰래 넘어간다.
     focus && !finished && current !== null && !roundGateOpen
+  );
+
+  // 되돌리기는 위 채점 단축키들과 별도로 둔다 — 방금 채점이 하필 라운드를 막 채우거나
+  // 세션을 끝내버린 경우에도(roundGateOpen/finished로 채점 단축키는 꺼진 상태) 되돌릴
+  // 수 있어야 하기 때문이다.
+  useKeyboardShortcuts(
+    { Backspace: () => undoLastScore() },
+    focus && lastUndo !== null
   );
 
   if (focus) {
@@ -739,7 +825,10 @@ function PracticePageInner() {
             }
           }}
           label="연습 종료하기"
-          extraAction={!finished && !roundGateOpen && queue.length > 1 ? { label: "단어 순서 섞기", onClick: shuffleQueue } : undefined}
+          extraAction={[
+            ...(lastUndo ? [{ label: "되돌리기", onClick: undoLastScore }] : []),
+            ...(!finished && !roundGateOpen && queue.length > 1 ? [{ label: "단어 순서 섞기", onClick: shuffleQueue }] : []),
+          ]}
         />
       </FocusScreen>
     );

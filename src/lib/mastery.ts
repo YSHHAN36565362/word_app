@@ -79,8 +79,9 @@ export async function loadAllMastery(userId: string): Promise<Map<string, Master
 // SM-2식 반복 횟수에 따라 점점 늘어나는 간격 대신 점수별 고정값을 쓴다).
 // 모름·헷갈림은 굳이 다음날까지 미루면 오늘 안에 다시 볼 기회가 없어져 버려서
 // 오히려 학습에 방해가 된다 — 그래서 간격을 0으로 둬 "항상 지금 다시 봐야 하는
-// 상태"로 유지하고, 실제로 얼마나 빨리 다시 만나는지는 queue.ts의 requeuePosition
-// (이번 세션 안에서 모름은 5~15%, 헷갈림은 20~40% 위치에 재삽입)이 정한다.
+// 상태"로 유지하고, 실제로 얼마나 빨리 다시 만나는지는 queue.ts의
+// requeuePosition/requeueRangeBounds(이번 세션 큐 안에서 모름은 이번 라운드
+// 안, 헷갈림은 다음 또는 3~5라운드 뒤, 조금 앎도 3~5라운드 뒤에 재삽입)이 정한다.
 const FIXED_INTERVAL_DAYS: Record<ScoreLevel, number> = {
   0: 0,
   40: 0,
