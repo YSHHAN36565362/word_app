@@ -418,9 +418,10 @@ function PracticePageInner() {
     let nextQueue = [...queue];
     let nextDone = doneCount;
     const key = wordKey(current);
-    // 완벽함(100)·조금 앎(60)은 큐에서 빼고 완료로 친다. 헷갈림(40)·모름(0)만 다시 꽂는다.
-    if (level < 60) {
-      const pos = requeuePosition(nextQueue.length, level as 40 | 0, userRoundSize);
+    // 완벽함(100)만 큐에서 빼고 완료로 친다. 조금 앎(60)·헷갈림(40)·모름(0)은 다시 꽂아
+    // 이번 세션 안에서 한 번 더 만난다.
+    if (level < 100) {
+      const pos = requeuePosition(nextQueue.length, level as 60 | 40 | 0, userRoundSize);
       nextQueue.splice(pos, 0, current);
     } else {
       nextDone += 1;
@@ -535,6 +536,7 @@ function PracticePageInner() {
     // 쓴다 — 그래야 라벨에 적힌 숫자와 실제 동작이 항상 일치한다.
     const unknownRange = requeueRangeBounds(0, userRoundSize);
     const shakyRange = requeueRangeBounds(40, userRoundSize);
+    const learnedRange = requeueRangeBounds(60, userRoundSize);
     // doneCount가 라운드 크기의 정확한 배수인 순간은 두 가지 의미가 있다: 라운드 완료
     // 화면이 떠 있는 동안은 "방금 끝난 라운드가 꽉 찼다"(가득 찬 바), 그 화면을 닫고
     // 다음 라운드로 넘어간 뒤에는 "새 라운드에서 아직 아무것도 안 했다"(빈 바)는 뜻이라
@@ -602,7 +604,7 @@ function PracticePageInner() {
                       className="btn-3d btn-accent"
                       style={{ ...scoreBtnStyle(scoreBtnScale), flexDirection: "column" }}
                     >
-                      <span style={{ fontSize: "0.82em", whiteSpace: "nowrap" }}>완벽함 (100 · 스택 제외)</span>
+                      <span style={{ fontSize: "0.82em", whiteSpace: "nowrap" }}>완벽함 (스택 제외)</span>
                       <KeyBadge>4 · ↑ · W · Num8</KeyBadge>
                     </button>
                     <button
@@ -610,7 +612,9 @@ function PracticePageInner() {
                       className="btn-3d btn-blue"
                       style={{ ...scoreBtnStyle(scoreBtnScale), flexDirection: "column" }}
                     >
-                      <span style={{ fontSize: "0.82em", whiteSpace: "nowrap" }}>조금 앎 (60 · 스택 제외)</span>
+                      <span style={{ fontSize: "0.82em", whiteSpace: "nowrap" }}>
+                        조금 앎 ({learnedRange.lo}~{learnedRange.hi}번째)
+                      </span>
                       <KeyBadge>3 · ← · A · Num4</KeyBadge>
                     </button>
                     <button
@@ -619,7 +623,7 @@ function PracticePageInner() {
                       style={{ ...scoreBtnStyle(scoreBtnScale), flexDirection: "column" }}
                     >
                       <span style={{ fontSize: "0.82em", whiteSpace: "nowrap" }}>
-                        헷갈림 (40 · {shakyRange.lo}~{shakyRange.hi}번째)
+                        헷갈림 ({shakyRange.lo}~{shakyRange.hi}번째)
                       </span>
                       <KeyBadge>2 · → · D · Num6</KeyBadge>
                     </button>
@@ -629,7 +633,7 @@ function PracticePageInner() {
                       style={{ ...scoreBtnStyle(scoreBtnScale), flexDirection: "column" }}
                     >
                       <span style={{ fontSize: "0.82em", whiteSpace: "nowrap" }}>
-                        모름 (0 · {unknownRange.lo}~{unknownRange.hi}번째)
+                        모름 ({unknownRange.lo}~{unknownRange.hi}번째)
                       </span>
                       <KeyBadge>1 · ↓ · S · Num2</KeyBadge>
                     </button>

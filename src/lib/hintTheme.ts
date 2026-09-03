@@ -68,19 +68,19 @@ export const HINT_SCALE_MIN = 0.8;
 export const HINT_SCALE_MAX = 1.6;
 export const HINT_SCALE_STEP = 0.1;
 
-/** 기본 테마: 전부 보이되, 자주 찾는 구간(치트키·예문)에만 색을 준다. */
+/** 기본 테마: 전부 보이되, 자주 찾는 구간(읽기·한자 분해·예문)에만 색을 준다. */
 export const DEFAULT_HINT_THEME: HintTheme = {
   reading: { visible: true, color: "var(--blue)", scale: 1 },
   // 한자1/한자2가 화면에서 멀리 떨어져 있어 어디부터 새 한자인지 훑어보기 어렵다는
   // 요청으로, 제목 줄만 본문(kanji)과 다른 색으로 강조해 눈에 잘 띄게 한다.
-  kanjiHeader: { visible: true, color: "var(--red-dark)", scale: 1.05 },
-  kanji: { visible: true, color: "", scale: 1 },
+  kanjiHeader: { visible: true, color: "var(--red)", scale: 1.05 },
+  kanji: { visible: true, color: "var(--amber)", scale: 1 },
   summary: { visible: true, color: "", scale: 1 },
-  mnemonic: { visible: true, color: "var(--accent)", scale: 1 },
+  mnemonic: { visible: true, color: "", scale: 1 },
   scene: { visible: true, color: "", scale: 1 },
   example: { visible: true, color: "var(--amber)", scale: 1 },
   conjugation: { visible: true, color: "", scale: 1 },
-  confusable: { visible: true, color: "var(--red)", scale: 1 },
+  confusable: { visible: true, color: "", scale: 1 },
   etc: { visible: true, color: "", scale: 1 },
 };
 
