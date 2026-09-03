@@ -12,6 +12,28 @@ export const ROUND_SIZE = 15;
 const MIN_GAP = 3;
 
 /**
+ * 모름(0)/헷갈림(40)을 다시 꽂아 넣을 목표 구간(lo~hi번째 카드 뒤)을 계산한다.
+ * `requeuePosition`이 실제 재삽입 위치를 뽑을 때도, 채점 버튼에 "몇 번째쯤 다시
+ * 나오는지" 라벨을 보여줄 때도 이 함수 하나만 쓴다 — 라벨에 적힌 숫자와 실제 동작이
+ * 어긋나는 일(예전에 "7일 후"라고 적어놓고 실제로는 아니었던 것과 같은 문제)이
+ * 다시는 생기지 않도록, 숫자의 출처를 하나로 합쳤다.
+ */
+export function requeueRangeBounds(level: 40 | 0, roundSize: number = ROUND_SIZE): { lo: number; hi: number } {
+  if (level === 0) {
+    const lo = MIN_GAP;
+    const hi = Math.max(lo, roundSize - 1);
+    return { lo, hi };
+  }
+  // 헷갈림(40)은 다음 라운드(2번째) 안에 넣을지, 그보다 나중인 3~5번째 라운드 안에
+  // 넣을지를 반반 확률로 고른다 — 라벨은 두 구간을 합친 전체 범위(최솟값~최댓값)로 보여준다.
+  const nextRound: [number, number] = [roundSize, roundSize * 2 - 1];
+  const laterRounds: [number, number] = [roundSize * 2, roundSize * 5 - 1];
+  const lo = Math.max(Math.min(nextRound[0], laterRounds[0]), MIN_GAP);
+  const hi = Math.max(nextRound[1], laterRounds[1]);
+  return { lo, hi };
+}
+
+/**
  * 망각 곡선 큐: 채점 점수가 낮을수록 큐의 앞쪽(더 가까운 위치) 구간에 재삽입한다.
  * 완벽함(100)·조금 앎(60)은 큐에서 완전히 제거된다 — "조금 앎"까지는 이번 세션에서
  * 충분히 안 것으로 보고 완료율에도 반영한다(예전에는 100만 완료로 쳐서 완료율이
@@ -31,8 +53,9 @@ export function requeuePosition(queueLen: number, level: 40 | 0, roundSize: numb
   const clamp = (n: number) => Math.max(0, Math.min(n, queueLen));
 
   if (level === 0) {
-    const loIdx = clamp(MIN_GAP);
-    const hiIdx = Math.max(loIdx, clamp(roundSize - 1));
+    const { lo, hi } = requeueRangeBounds(0, roundSize);
+    const loIdx = clamp(lo);
+    const hiIdx = Math.max(loIdx, clamp(hi));
     return loIdx + Math.floor(Math.random() * (hiIdx - loIdx + 1));
   }
 

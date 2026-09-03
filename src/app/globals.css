@@ -72,15 +72,28 @@ body {
 }
 
 /* ---------- 듀오링고 스타일 3D 눌림 버튼 ---------- */
+/* 치수를 커스텀 프로퍼티로 뒀다 — 연습 파트의 채점 버튼 크기 조절(⚙ 설정)이 이
+   값들을 인라인 style로 덮어써서 padding·border-radius·font-size와 함께 box-shadow
+   "테두리" 두께까지 실제로 같이 줄어들게 하기 위함이다. 값을 안 넘기는 다른 모든
+   버튼은 아래 기본값 그대로 지금까지와 동일하게 렌더링된다. */
 .btn-3d {
+  --btn-pad-y: 0.85rem;
+  --btn-pad-x: 1.1rem;
+  --btn-radius: 16px;
+  --btn-gap: 0.4rem;
+  --btn-shadow-depth: 4px;
+  --btn-shadow-depth-active: 1px;
+  --btn-press-y: 3px;
+  --btn-font-size: 1rem;
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: var(--btn-gap);
   font-weight: 700;
-  border-radius: 16px;
-  padding: 0.85rem 1.1rem;
+  font-size: var(--btn-font-size);
+  border-radius: var(--btn-radius);
+  padding: var(--btn-pad-y) var(--btn-pad-x);
   border: none;
   cursor: pointer;
   transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.15s ease;
@@ -92,53 +105,53 @@ body {
   cursor: not-allowed;
 }
 .btn-3d:active:not(:disabled) {
-  transform: translateY(3px);
+  transform: translateY(var(--btn-press-y));
 }
 
 .btn-accent {
   background: var(--accent);
   color: #ffffff;
-  box-shadow: 0 4px 0 var(--accent-dark);
+  box-shadow: 0 var(--btn-shadow-depth) 0 var(--accent-dark);
 }
 .btn-accent:active:not(:disabled) {
-  box-shadow: 0 1px 0 var(--accent-dark);
+  box-shadow: 0 var(--btn-shadow-depth-active) 0 var(--accent-dark);
 }
 
 .btn-blue {
   background: var(--blue);
   color: #ffffff;
-  box-shadow: 0 4px 0 var(--blue-dark);
+  box-shadow: 0 var(--btn-shadow-depth) 0 var(--blue-dark);
 }
 .btn-blue:active:not(:disabled) {
-  box-shadow: 0 1px 0 var(--blue-dark);
+  box-shadow: 0 var(--btn-shadow-depth-active) 0 var(--blue-dark);
 }
 
 .btn-red {
   background: var(--red);
   color: #ffffff;
-  box-shadow: 0 4px 0 var(--red-dark);
+  box-shadow: 0 var(--btn-shadow-depth) 0 var(--red-dark);
 }
 .btn-red:active:not(:disabled) {
-  box-shadow: 0 1px 0 var(--red-dark);
+  box-shadow: 0 var(--btn-shadow-depth-active) 0 var(--red-dark);
 }
 
 .btn-ghost {
   background: var(--card);
   color: var(--text);
   border: 2px solid var(--card-border);
-  box-shadow: 0 4px 0 var(--card-border);
+  box-shadow: 0 var(--btn-shadow-depth) 0 var(--card-border);
 }
 .btn-ghost:active:not(:disabled) {
-  box-shadow: 0 1px 0 var(--card-border);
+  box-shadow: 0 var(--btn-shadow-depth-active) 0 var(--card-border);
 }
 
 .btn-amber {
   background: var(--amber);
   color: #2b2200;
-  box-shadow: 0 4px 0 #c99f00;
+  box-shadow: 0 var(--btn-shadow-depth) 0 #c99f00;
 }
 .btn-amber:active:not(:disabled) {
-  box-shadow: 0 1px 0 #c99f00;
+  box-shadow: 0 var(--btn-shadow-depth-active) 0 #c99f00;
 }
 
 /* 매칭 게임 전용 색(보라) — 다른 파트와 구분되는 "게임" 느낌을 준다 */

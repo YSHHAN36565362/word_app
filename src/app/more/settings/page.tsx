@@ -8,7 +8,6 @@ import { DAILY_GOAL_MAX, DAILY_GOAL_MIN, goalStepFor, useDailyGoal } from "@/hoo
 import { isSyncEnabled } from "@/lib/progress";
 import { deleteLearningLog, formatKstDateTime, listAllLearningLogs, LearningLogEntryWithPart, Part } from "@/lib/learningLog";
 import PageHeader from "@/components/PageHeader";
-import HintThemeSettings from "@/components/HintThemeSettings";
 
 const PART_LABEL: Record<Part, string> = {
   study: "학습",
@@ -130,9 +129,16 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="mt-4">
-        <HintThemeSettings />
-      </div>
+      <Link
+        href="/more/settings/font-size"
+        className="mt-4 flex items-center justify-between study-card px-4 py-3 text-sm"
+        style={{ color: "var(--text)" }}
+      >
+        <span>
+          한자·힌트 <span className="font-bold">글자 크기·색상</span>은 별도 화면에서 조절할 수 있어요.
+        </span>
+        <span style={{ color: "var(--text-muted)" }}>›</span>
+      </Link>
 
       <div className="mt-4 study-card p-4">
         <div className="text-sm font-bold">화면 테마</div>

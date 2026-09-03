@@ -28,7 +28,7 @@ import { useFontScale } from "@/hooks/useFontScale";
 import { useScoreButtonPrefs } from "@/hooks/useScoreButtonPrefs";
 import { useRoundSize } from "@/hooks/useRoundSize";
 import { fetchWords } from "@/lib/api";
-import { getDisplaySide, requeuePosition, ROUND_SIZE, shuffle, withoutKey, wordKey } from "@/lib/queue";
+import { getDisplaySide, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, saveWordMastery } from "@/lib/mastery";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
@@ -45,6 +45,27 @@ const DUE_REVIEW_PATH_KEY = "__due_review__";
 // 몇 라운드 뒤에 다시 보여줄지 정하므로, 값 자체는 queue.ts에서 가져와 공유한다.
 // 이 이상 헷갈림/모름으로 채점된 단어는 "자주 틀리는 단어" 배지를 붙인다.
 const FREQUENTLY_WRONG_THRESHOLD = 3;
+
+// 채점 버튼(.btn-3d) 크기 조절. 예전엔 그리드 전체에 transform:scale()을 걸었는데,
+// 버튼이 작아져도 box-shadow(듀오링고식 3D 아래쪽 "테두리")가 그대로인 것처럼 보인다는
+// 제보가 있었다 — transform은 렌더링 레이어를 통째로 축소해야 하는데, 실제로는 그
+// 자리에서 box-shadow 색만 유지된 채 두께가 안 줄어드는 것처럼 보이는 경우가 있어(특히
+// 저배율에서 서브픽셀 반올림), globals.css의 .btn-3d가 갖는 CSS 커스텀 프로퍼티
+// (--btn-pad-*, --btn-radius, --btn-shadow-depth 등)를 직접 scale에 비례해 덮어써서
+// padding·모서리 둥글기·글자 크기·그림자 두께·눌림 애니메이션까지 전부 확실히 같이
+// 줄어들게 한다(값을 안 주는 다른 모든 .btn-3d 버튼은 globals.css 기본값 그대로 유지).
+function scoreBtnStyle(scale: number): React.CSSProperties {
+  return {
+    ["--btn-pad-y" as string]: `${0.85 * scale}rem`,
+    ["--btn-pad-x" as string]: `${1.1 * scale}rem`,
+    ["--btn-radius" as string]: `${16 * scale}px`,
+    ["--btn-gap" as string]: `${0.4 * scale}rem`,
+    ["--btn-font-size" as string]: `${1 * scale}rem`,
+    ["--btn-shadow-depth" as string]: `${4 * scale}px`,
+    ["--btn-shadow-depth-active" as string]: `${1 * scale}px`,
+    ["--btn-press-y" as string]: `${3 * scale}px`,
+  } as React.CSSProperties;
+}
 
 interface RestoreRequest {
   paths: string[];
@@ -435,7 +456,9 @@ function PracticePageInner() {
     setShowAnswer(false);
     setShowHint(false);
     setTurnId((t) => t + 1);
-    setFlashColor(level >= 60 ? "var(--accent)" : "var(--red)");
+    // 완벽함=초록, 조금 앎=파랑, 헷갈림=노랑, 모름=빨강 — 채점 버튼을 숨겨둔 상태에서도
+    // 방금 어느 난이도로 채점했는지 화면 전체가 잠깐 그 색으로 번쩍여 바로 알 수 있게 한다.
+    setFlashColor(level === 100 ? "var(--accent)" : level === 60 ? "var(--blue)" : level === 40 ? "var(--amber)" : "var(--red)");
     setFlashKey((k) => k + 1);
     setMastery((m) => {
       const next = new Map(m);
@@ -507,6 +530,11 @@ function PracticePageInner() {
     const aText = current ? (displaySide === 0 ? current.meaning : current.word) : "";
     const wrongCount = current ? mastery.get(wordKey(current))?.wrongCount ?? 0 : 0;
     const roundSize = Math.min(userRoundSize, total || userRoundSize);
+    // 채점 버튼에 "몇 번째쯤 다시 나오는지" 보여주기 위한 실제 재삽입 구간. score()가
+    // requeuePosition에 넘기는 것과 똑같이 userRoundSize(세션 클램프 전 원래 설정값)를
+    // 쓴다 — 그래야 라벨에 적힌 숫자와 실제 동작이 항상 일치한다.
+    const unknownRange = requeueRangeBounds(0, userRoundSize);
+    const shakyRange = requeueRangeBounds(40, userRoundSize);
     // doneCount가 라운드 크기의 정확한 배수인 순간은 두 가지 의미가 있다: 라운드 완료
     // 화면이 떠 있는 동안은 "방금 끝난 라운드가 꽉 찼다"(가득 찬 바), 그 화면을 닫고
     // 다음 라운드로 넘어간 뒤에는 "새 라운드에서 아직 아무것도 안 했다"(빈 바)는 뜻이라
@@ -568,21 +596,41 @@ function PracticePageInner() {
                     채점 버튼이 숨겨져 있어요 — 키보드 1~4 또는 방향키로 채점하세요 (⚙ 설정에서 다시 켜기)
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3" style={{ transform: `scale(${scoreBtnScale})`, transformOrigin: "bottom center" }}>
-                    <button onClick={() => score(100)} className="btn-3d btn-accent">
-                      완벽함 (100 · 7일 후)
+                  <div className="grid grid-cols-2" style={{ gap: `${0.75 * scoreBtnScale}rem` }}>
+                    <button
+                      onClick={() => score(100)}
+                      className="btn-3d btn-accent"
+                      style={{ ...scoreBtnStyle(scoreBtnScale), flexDirection: "column" }}
+                    >
+                      <span style={{ fontSize: "0.82em", whiteSpace: "nowrap" }}>완벽함 (100 · 스택 제외)</span>
                       <KeyBadge>4 · ↑ · W · Num8</KeyBadge>
                     </button>
-                    <button onClick={() => score(60)} className="btn-3d btn-blue">
-                      조금 앎 (60 · 3일 후)
+                    <button
+                      onClick={() => score(60)}
+                      className="btn-3d btn-blue"
+                      style={{ ...scoreBtnStyle(scoreBtnScale), flexDirection: "column" }}
+                    >
+                      <span style={{ fontSize: "0.82em", whiteSpace: "nowrap" }}>조금 앎 (60 · 스택 제외)</span>
                       <KeyBadge>3 · ← · A · Num4</KeyBadge>
                     </button>
-                    <button onClick={() => score(40)} className="btn-3d btn-amber">
-                      헷갈림 (40 · 잠시 후 다시)
+                    <button
+                      onClick={() => score(40)}
+                      className="btn-3d btn-amber"
+                      style={{ ...scoreBtnStyle(scoreBtnScale), flexDirection: "column" }}
+                    >
+                      <span style={{ fontSize: "0.82em", whiteSpace: "nowrap" }}>
+                        헷갈림 (40 · {shakyRange.lo}~{shakyRange.hi}번째)
+                      </span>
                       <KeyBadge>2 · → · D · Num6</KeyBadge>
                     </button>
-                    <button onClick={() => score(0)} className="btn-3d btn-red">
-                      모름 (0 · 곧 다시)
+                    <button
+                      onClick={() => score(0)}
+                      className="btn-3d btn-red"
+                      style={{ ...scoreBtnStyle(scoreBtnScale), flexDirection: "column" }}
+                    >
+                      <span style={{ fontSize: "0.82em", whiteSpace: "nowrap" }}>
+                        모름 (0 · {unknownRange.lo}~{unknownRange.hi}번째)
+                      </span>
                       <KeyBadge>1 · ↓ · S · Num2</KeyBadge>
                     </button>
                   </div>
