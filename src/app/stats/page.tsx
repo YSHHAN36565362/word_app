@@ -4,13 +4,22 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useUserId } from "@/hooks/useUserId";
 import { loadStudyStats } from "@/lib/progress";
+import { loadAllMastery, MasteryInfo } from "@/lib/mastery";
+import { buildHeatmap, dueForecast, loadActivityDates, masteryBreakdown } from "@/lib/insights";
 import { StudyStatRecord } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
+import StudyHeatmap from "@/components/StudyHeatmap";
+import MasteryBreakdownBar from "@/components/MasteryBreakdownBar";
+import DueForecastChart from "@/components/DueForecastChart";
+
+const HEATMAP_WEEKS = 16;
 
 export default function StatsPage() {
   const { userId, ready } = useUserId();
   const [records, setRecords] = useState<StudyStatRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mastery, setMastery] = useState<Map<string, MasteryInfo>>(new Map());
+  const [activeDates, setActiveDates] = useState<string[]>([]);
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -18,7 +27,14 @@ export default function StatsPage() {
       setRecords(r);
       setLoading(false);
     });
+    // 숙련도 분포·복습 예보·히트맵용 데이터. 전부 읽기 전용 조회다.
+    loadAllMastery(userId).then(setMastery);
+    loadActivityDates(userId).then(setActiveDates);
   }, [ready, userId]);
+
+  const breakdown = useMemo(() => masteryBreakdown(mastery), [mastery]);
+  const forecast = useMemo(() => dueForecast(mastery, 7), [mastery]);
+  const heatmap = useMemo(() => buildHeatmap(activeDates, records, HEATMAP_WEEKS), [activeDates, records]);
 
   const examRecords = useMemo(() => records.filter((r) => r.part === "exam"), [records]);
   const totalQuestions = examRecords.reduce((s, r) => s + r.total, 0);
@@ -67,6 +83,30 @@ export default function StatsPage() {
         title="학습 통계"
         subtitle="연습·시험을 마칠 때마다 자동으로 기록됩니다."
       />
+
+      {/* 학습 히트맵 — 스트릭 숫자만으로는 안 보이는 "요즘의 꾸준함"을 한눈에. */}
+      {heatmap.some((c) => c.level > 0) && (
+        <div className="mt-4 study-card p-4">
+          <div className="mb-2 text-sm font-bold">학습 히트맵 (최근 {HEATMAP_WEEKS}주)</div>
+          <StudyHeatmap cells={heatmap} weeks={HEATMAP_WEEKS} />
+        </div>
+      )}
+
+      {/* 단어 숙련도 분포 — 안키의 카드 상태 분포에 해당. */}
+      {breakdown.total > 0 && (
+        <div className="mt-4 study-card p-4">
+          <div className="mb-2 text-sm font-bold">단어 숙련도 분포 (채점한 {breakdown.total}개)</div>
+          <MasteryBreakdownBar breakdown={breakdown} />
+        </div>
+      )}
+
+      {/* 앞으로 7일 복습 예보 — 안키의 Future Due 그래프. */}
+      {breakdown.total > 0 && (
+        <div className="mt-4 study-card p-4">
+          <div className="mb-2 text-sm font-bold">복습 예보 (앞으로 7일)</div>
+          <DueForecastChart forecast={forecast} />
+        </div>
+      )}
 
       {loading ? (
         <div className="mt-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>

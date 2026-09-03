@@ -1,22 +1,55 @@
 "use client";
 
+import { HintSectionKey, sectionOfLine } from "@/lib/hintTheme";
+import { useHintTheme } from "@/hooks/useHintTheme";
+
 /**
- * 힌트 본문 안에서 "[읽기]"/"[한자1]"/"[종합]"처럼 대괄호로만 이루어진 줄(구간
- * 제목)만 찾아서 본문과 다르게 강조한다. 배경색을 칠하지 않고 글자색·굵기만
- * 바꿔서, 다크/라이트 모드 어느 쪽에서도 눈에 거슬리지 않을 정도로만 튀게 했다.
+ * 힌트 본문을 구간(읽기/한자/종합/치트키/장면/예문/활용/헷갈리는 단어)별로 나눠서,
+ * 설정에서 정한 색·크기로 그리고 숨긴 구간은 아예 렌더하지 않는다.
+ *
+ * 예전 버전은 "대괄호만 있는 줄"만 강조하도록 되어 있었는데, 실제 단어장은
+ * `[읽기] 従=したが + う → …`처럼 태그와 내용이 같은 줄에 있어서 사실상 아무 줄도
+ * 강조되지 않고 전부 같은 회색으로 나왔다. 이제 태그가 줄 앞에 있으면 인식한다.
  */
-const BRACKET_LINE = /^\s*\[[^[\]]+\]\s*$/;
+const TAG_HEAD = /^(\s*\[[^\]]+\])(.*)$/;
+const KANJI_HEADER_TAG = /^\s*\[한자\d+\]/;
 
 export default function HintText({ text }: { text: string }) {
+  const { theme } = useHintTheme();
   const lines = text.split("\n");
-  return (
-    <>
-      {lines.map((line, i) => (
-        <span key={i} style={BRACKET_LINE.test(line) ? { color: "var(--blue)", fontWeight: 800 } : undefined}>
-          {line}
-          {i < lines.length - 1 ? <br /> : null}
-        </span>
-      ))}
-    </>
-  );
+
+  let section: HintSectionKey = "etc";
+  const rendered: React.ReactNode[] = [];
+
+  lines.forEach((line, i) => {
+    section = sectionOfLine(line, section);
+    const style = theme[section];
+    if (!style.visible) return; // 숨긴 구간은 통째로 건너뛴다(이어지는 하위 줄 포함).
+
+    const m = line.match(TAG_HEAD);
+    // 한자1/한자2… 제목 줄은 요청에 따라 kanji 구간 본문과 다른 색으로 강조할 수 있다
+    // (kanjiHeader.visible은 "숨김"이 아니라 "이 강조를 쓸지"를 뜻함 — hintTheme.ts 참고).
+    const isKanjiHeader = KANJI_HEADER_TAG.test(line);
+    const headerStyle = isKanjiHeader && theme.kanjiHeader.visible ? theme.kanjiHeader : style;
+    const common = {
+      color: headerStyle.color || undefined,
+      fontSize: headerStyle.scale !== 1 ? `${headerStyle.scale}em` : undefined,
+    };
+
+    rendered.push(
+      <span key={i} style={common}>
+        {m ? (
+          <>
+            <b style={{ fontWeight: 800 }}>{m[1]}</b>
+            {m[2]}
+          </>
+        ) : (
+          line
+        )}
+        <br />
+      </span>
+    );
+  });
+
+  return <>{rendered}</>;
 }

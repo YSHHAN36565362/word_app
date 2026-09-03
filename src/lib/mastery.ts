@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseAsync } from "./supabase";
+import { getSupabaseAsync, logSupabaseError } from "./supabase";
 import { ScoreLevel, WordEntry } from "./types";
 import { wordKey } from "./queue";
 
@@ -13,6 +13,7 @@ export interface MasteryInfo {
   intervalDays: number; // SRS(간격 반복) 다음 복습까지의 간격(일)
   repetition: number; // 연속으로 60점 이상 맞힌 횟수(틀리면 0으로 리셋)
   nextReviewAt: string | null; // 다음 복습 예정 시각(ISO). 아직 한 번도 채점 안 됐으면 null.
+  updatedAt: string | null; // 마지막으로 채점한 시각(ISO). "오늘 몇 개 외웠나" 집계에 쓴다.
 }
 
 // userId -> 진행 중인/최근 완료된 조회 Promise. 같은 사용자에 대해 짧은 시간 안에 여러 곳
@@ -42,8 +43,9 @@ export async function loadAllMastery(userId: string): Promise<Map<string, Master
     if (!supabase) return map;
     const { data, error } = await supabase
       .from("word_mastery")
-      .select("word_key, score, wrong_count, unknown_count, interval_days, repetition, next_review_at")
+      .select("word_key, score, wrong_count, unknown_count, interval_days, repetition, next_review_at, updated_at")
       .eq("user_id", userId);
+    logSupabaseError("숙련도 불러오기", error);
     if (error || !data) return map;
     for (const row of data as {
       word_key: string;
@@ -53,6 +55,7 @@ export async function loadAllMastery(userId: string): Promise<Map<string, Master
       interval_days: number | null;
       repetition: number | null;
       next_review_at: string | null;
+      updated_at: string | null;
     }[]) {
       map.set(row.word_key, {
         score: row.score,
@@ -61,6 +64,7 @@ export async function loadAllMastery(userId: string): Promise<Map<string, Master
         intervalDays: row.interval_days ?? 0,
         repetition: row.repetition ?? 0,
         nextReviewAt: row.next_review_at ?? null,
+        updatedAt: row.updated_at ?? null,
       });
     }
     return map;
@@ -86,10 +90,10 @@ const FIXED_INTERVAL_DAYS: Record<ScoreLevel, number> = {
 
 /**
  * 방금 채점한 점수로부터 다음 SRS 상태를 계산한다. next_review_at이 지나기 전까지는
- * prioritizeByMastery의 NOT_DUE_PUSH가 이 단어를 뒤로 미뤄두므로, "오늘 채점한 단어는
- * 오늘 안에는 평소 스택 위치 그대로 있다가, 정해진 날짜가 되면 다시 큐 위쪽(낮은 점수는
- * 원래 우선순위가 높음)으로 올라온다"는 동작이 별도 로직 없이 자연히 만들어진다.
- * 세션 내에서 틀린 단어를 몇 번 더 재출제할지는 이 SRS 간격과 무관하게 queue.ts의
+ * excludeNotDue가 이 단어를 그날의 연습 스택에서 아예 제외해두므로, "오늘 채점한
+ * 단어는 정해진 날짜가 될 때까지 다음 세션들에 안 나타나다가, 그날이 되면 다시
+ * 나타난다"는 동작이 별도 로직 없이 자연히 만들어진다. 세션 내에서 틀린 단어를
+ * 몇 번 더 재출제할지는 이 SRS 간격과 무관하게 queue.ts의
  * requeuePosition이 따로 처리한다(간격 반복은 "며칠 뒤에 또 볼지"를 정하고, requeue는
  * "이번 세션 안에서 언제 다시 만날지"를 정한다).
  */
@@ -98,8 +102,9 @@ export function computeNextMastery(prev: MasteryInfo | undefined, score: ScoreLe
   const unknownCount = score === 0 ? (prev?.unknownCount ?? 0) + 1 : (prev?.unknownCount ?? 0);
   const repetition = score >= 60 ? (prev?.repetition ?? 0) + 1 : 0;
   const intervalDays = FIXED_INTERVAL_DAYS[score];
-  const nextReviewAt = new Date(Date.now() + intervalDays * 24 * 60 * 60 * 1000).toISOString();
-  return { score, wrongCount, unknownCount, repetition, intervalDays, nextReviewAt };
+  const now = Date.now();
+  const nextReviewAt = new Date(now + intervalDays * 24 * 60 * 60 * 1000).toISOString();
+  return { score, wrongCount, unknownCount, repetition, intervalDays, nextReviewAt, updatedAt: new Date(now).toISOString() };
 }
 
 /** 채점 직후 그 단어의 최신 SRS 상태를 저장한다. 실패해도 학습 흐름은 막지 않는다(fire-and-forget로 호출). */
@@ -116,7 +121,7 @@ export async function saveWordMastery(userId: string, word: WordEntry, info: Mas
       if (!supabase) return;
       // word/meaning/hint도 함께 저장해둔다 — "복습" 목록에서 점수 이력만이 아니라
       // 실제 단어 내용을 다시 보여주려면 원문이 필요하기 때문이다.
-      await supabase.from("word_mastery").upsert(
+      const { error } = await supabase.from("word_mastery").upsert(
         {
           user_id: userId,
           word_key: wordKey(word),
@@ -133,6 +138,7 @@ export async function saveWordMastery(userId: string, word: WordEntry, info: Mas
         },
         { onConflict: "user_id,word_key" }
       );
+      logSupabaseError("숙련도 저장", error);
     });
   saveChains.set(chainKey, run);
   return run;
@@ -162,6 +168,7 @@ export async function loadMasteredWords(userId: string, minScore = 60): Promise<
     .not("word", "is", null)
     .order("updated_at", { ascending: false })
     .limit(500);
+  logSupabaseError("복습 목록 불러오기", error);
   if (error || !data) return [];
   return (data as { word: string; meaning: string; hint: string; score: number; next_review_at: string | null }[]).map((row) => ({
     word: row.word,
@@ -190,6 +197,7 @@ export async function loadDueReviewWords(userId: string): Promise<WordEntry[]> {
     .not("word", "is", null)
     .order("next_review_at", { ascending: true })
     .limit(200);
+  logSupabaseError("오늘의 복습 목록 불러오기", error);
   if (error || !data) return [];
   return data as WordEntry[];
 }
@@ -210,6 +218,7 @@ export async function loadFrequentlyUnknownWords(userId: string, threshold = 5):
     .not("word", "is", null)
     .order("unknown_count", { ascending: false })
     .limit(200);
+  logSupabaseError("자주 틀리는 단어 목록 불러오기", error);
   if (error || !data) return [];
   return data as WordEntry[];
 }
@@ -220,7 +229,8 @@ export async function resetWordMastery(userId: string, word: WordEntry): Promise
   cache.delete(userId);
   const supabase = await getSupabaseAsync();
   if (!supabase) return;
-  await supabase.from("word_mastery").delete().eq("user_id", userId).eq("word_key", wordKey(word));
+  const { error } = await supabase.from("word_mastery").delete().eq("user_id", userId).eq("word_key", wordKey(word));
+  logSupabaseError("숙련도 초기화", error);
 }
 
 // 점수 구간은 딱 5가지 값(0·40·50·60·100)뿐이라, 지터 없이 우선순위 그대로 정렬하면

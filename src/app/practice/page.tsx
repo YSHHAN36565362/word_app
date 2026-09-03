@@ -19,12 +19,14 @@ import SpeakButton from "@/components/SpeakButton";
 import MemoPad from "@/components/MemoPad";
 import HintText from "@/components/HintText";
 import FontSizeControl from "@/components/FontSizeControl";
-import ScoreButtonSizeControl from "@/components/ScoreButtonSizeControl";
+import PracticeSettingsPopover from "@/components/PracticeSettingsPopover";
+import SessionSummary, { EMPTY_TALLY, SessionTally } from "@/components/SessionSummary";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { useFontScale } from "@/hooks/useFontScale";
 import { useScoreButtonPrefs } from "@/hooks/useScoreButtonPrefs";
+import { useRoundSize } from "@/hooks/useRoundSize";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, ROUND_SIZE, shuffle, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
@@ -149,6 +151,14 @@ function PracticePageInner() {
   // 줄이거나 아예 숨길 수 있게 한다(src/hooks/useScoreButtonPrefs.ts 참고).
   const { scale: scoreBtnScale, setScale: setScoreBtnScale, adjustScale: adjustScoreBtnScale, hidden: scoreBtnsHidden, setHidden: setScoreBtnsHidden } = useScoreButtonPrefs();
 
+  // 라운드 크기(몇 개마다 완료 화면을 볼지). 한 번에 100~200개씩 하는 사람에게 15개
+  // 고정은 너무 자주 끊긴다는 피드백에 따라 연습 화면 설정에서 직접 조절하게 했다.
+  const { roundSize: userRoundSize, setRoundSize, adjustRoundSize } = useRoundSize();
+
+  // 이번 세션에서 어떤 채점을 몇 번 했는지 — 끝났을 때 요약 화면에 쓴다.
+  const [tally, setTally] = useState<SessionTally>(EMPTY_TALLY);
+  const [finishedAt, setFinishedAt] = useState<number | null>(null);
+
   useEffect(() => {
     if (!ready || !userId) return;
     loadFavoriteKeys(userId).then(setFavorites);
@@ -255,6 +265,8 @@ function PracticePageInner() {
     setTurnId((t) => t + 1);
     setMastery(mastery);
     setRoundGateOpen(false);
+    setTally({ ...EMPTY_TALLY, startedAt: Date.now() });
+    setFinishedAt(null);
     setFocus(true);
 
     persist({ queue: q, current: first, total: pool.length, done: 0, side, m: selectedMode, labels, paths });
@@ -301,6 +313,10 @@ function PracticePageInner() {
     setActiveFilePaths(saved.filePaths);
     setTurnId((t) => t + 1);
     setRoundGateOpen(false);
+    // 이어서 할 때는 이전 세션의 채점 분포를 이어받을 방법이 없으니(저장하지 않는다)
+    // 요약은 "이어서 한 이번 구간" 기준으로 새로 센다.
+    setTally({ ...EMPTY_TALLY, startedAt: Date.now() });
+    setFinishedAt(null);
     setFocus(true);
   }
 
@@ -383,7 +399,7 @@ function PracticePageInner() {
     const key = wordKey(current);
     // 완벽함(100)·조금 앎(60)은 큐에서 빼고 완료로 친다. 헷갈림(40)·모름(0)만 다시 꽂는다.
     if (level < 60) {
-      const pos = requeuePosition(nextQueue.length, level as 40 | 0);
+      const pos = requeuePosition(nextQueue.length, level as 40 | 0, userRoundSize);
       nextQueue.splice(pos, 0, current);
     } else {
       nextDone += 1;
@@ -396,11 +412,20 @@ function PracticePageInner() {
     }
     const nextCurrent = nextQueue.length > 0 ? nextQueue.shift()! : null;
     const nextSide = getDisplaySide(mode);
-    // 15개짜리 라운드를 막 채웠고(전에는 아니었고) 아직 큐에 남은 게 있으면, 다음 카드로
+    // 라운드 하나를 막 채웠고(전에는 아니었고) 아직 큐에 남은 게 있으면, 다음 카드로
     // 바로 넘어가는 대신 짧은 라운드 완료 화면을 한 번 보여준다.
-    const crossedRound = nextDone > doneCount && nextDone % ROUND_SIZE === 0 && (nextQueue.length > 0 || nextCurrent !== null);
+    const crossedRound = nextDone > doneCount && nextDone % userRoundSize === 0 && (nextQueue.length > 0 || nextCurrent !== null);
 
     const nextInfo = computeNextMastery(mastery.get(key), level);
+
+    setTally((t) => ({
+      ...t,
+      startedAt: t.startedAt || Date.now(),
+      perfect: t.perfect + (level === 100 ? 1 : 0),
+      learned: t.learned + (level === 60 ? 1 : 0),
+      shaky: t.shaky + (level === 40 ? 1 : 0),
+      unknown: t.unknown + (level === 0 ? 1 : 0),
+    }));
 
     setMascotState(level >= 60 ? "correct" : "wrong");
     setQueue(nextQueue);
@@ -424,6 +449,14 @@ function PracticePageInner() {
   }
 
   const finished = focus && current === null && queue.length === 0 && total > 0;
+
+  // 요약 화면의 소요 시간은 "끝난 순간"에 한 번만 재서 고정한다(렌더 중 Date.now() 금지).
+  useEffect(() => {
+    if (!finished) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setFinishedAt((prev) => prev ?? Date.now());
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [finished]);
 
   useEffect(() => {
     if (finished && userId && !resultSaved) {
@@ -473,7 +506,7 @@ function PracticePageInner() {
     const qText = current ? (displaySide === 0 ? current.word : current.meaning) : "";
     const aText = current ? (displaySide === 0 ? current.meaning : current.word) : "";
     const wrongCount = current ? mastery.get(wordKey(current))?.wrongCount ?? 0 : 0;
-    const roundSize = Math.min(ROUND_SIZE, total || ROUND_SIZE);
+    const roundSize = Math.min(userRoundSize, total || userRoundSize);
     // doneCount가 라운드 크기의 정확한 배수인 순간은 두 가지 의미가 있다: 라운드 완료
     // 화면이 떠 있는 동안은 "방금 끝난 라운드가 꽉 찼다"(가득 찬 바), 그 화면을 닫고
     // 다음 라운드로 넘어간 뒤에는 "새 라운드에서 아직 아무것도 안 했다"(빈 바)는 뜻이라
@@ -490,15 +523,20 @@ function PracticePageInner() {
             <FeedbackFlash flashKey={flashKey} color={flashColor} />
             {!finished && current && (
               <>
-                <label className="flex items-center justify-end gap-1.5 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
-                  <input
-                    type="checkbox"
-                    checked={hideMascot}
-                    onChange={(e) => setHideMascot(e.target.checked)}
-                    className="h-3.5 w-3.5"
+                <div className="flex justify-end">
+                  <PracticeSettingsPopover
+                    roundSize={userRoundSize}
+                    onAdjustRound={adjustRoundSize}
+                    onResetRound={() => setRoundSize(ROUND_SIZE)}
+                    scale={scoreBtnScale}
+                    onAdjustScale={adjustScoreBtnScale}
+                    onResetScale={() => setScoreBtnScale(1)}
+                    scoreHidden={scoreBtnsHidden}
+                    onSetScoreHidden={setScoreBtnsHidden}
+                    hideMascot={hideMascot}
+                    onSetHideMascot={setHideMascot}
                   />
-                  애니메이션 끄기
-                </label>
+                </div>
                 <ProgressBar ratio={roundRatio} />
                 <div className="mt-2 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-muted)" }}>
                   <span>이번 라운드 {posInRound} / {roundSize}</span>
@@ -522,21 +560,12 @@ function PracticePageInner() {
               </button>
             ) : (
               <div>
-                <div className="mb-1 flex justify-end">
-                  <ScoreButtonSizeControl
-                    scale={scoreBtnScale}
-                    onAdjust={adjustScoreBtnScale}
-                    onReset={() => setScoreBtnScale(1)}
-                    hidden={scoreBtnsHidden}
-                    onSetHidden={setScoreBtnsHidden}
-                  />
-                </div>
                 {scoreBtnsHidden ? (
                   <div
                     className="rounded-2xl py-3 text-center text-xs font-bold"
                     style={{ color: "var(--text-muted)", background: "var(--hint-bg)" }}
                   >
-                    채점 버튼이 숨겨져 있어요 — 키보드 1~4 또는 방향키로 채점하세요
+                    채점 버튼이 숨겨져 있어요 — 키보드 1~4 또는 방향키로 채점하세요 (⚙ 설정에서 다시 켜기)
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3" style={{ transform: `scale(${scoreBtnScale})`, transformOrigin: "bottom center" }}>
@@ -633,15 +662,12 @@ function PracticePageInner() {
             />
           </div>
         ) : (
-          <div className="study-card relative mt-10 p-8 text-center">
-            <Confetti />
-            <div className="flex justify-center mb-3">
-              <Mascot state="correct" />
-            </div>
-            <div className="text-lg font-bold" style={{ color: "var(--accent)" }}>
-              대기열의 모든 연습을 완료했습니다.
-            </div>
-          </div>
+          <SessionSummary
+            tally={tally}
+            total={total}
+            hideMascot={hideMascot}
+            elapsedMs={finishedAt && tally.startedAt ? finishedAt - tally.startedAt : null}
+          />
         )}
         <ExitFocusButton
           onExit={() => {

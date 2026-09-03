@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseAsync } from "./supabase";
+import { getSupabaseAsync, logSupabaseError } from "./supabase";
 import { StudyStatRecord, WordEntry } from "./types";
 import { wordKey } from "./queue";
 import { markTodayActive } from "./streak";
@@ -10,6 +10,87 @@ import { markTodayActive } from "./streak";
  * 모든 함수는 Supabase 미설정 시 조용히 실패(false/null/[])하도록 만들어,
  * 서버 설정 전에도 앱 자체는 정상 동작하게 한다 (기존 Streamlit 앱과 동일한 철학).
  */
+
+// ---------------------------------------------------------------------------
+// localStorage 보조 저장소 ("이어서 연습하기"용).
+//
+// learningLog.ts(최근 학습 요약)는 처음부터 이 기기 로컬 사본을 갖고 있어서, Supabase가
+// 설정되지 않았거나(로컬 개발, 환경변수 누락) 일시적으로 응답이 없어도 "학습 기록
+// 관리" 목록은 정상적으로 보인다 — 그래서 "진행 상황은 저장되는 것 같은데 이어하기만
+// 안 된다"는 제보로 이어졌다. 실제로는 이 파일(progress.ts)의 저장/조회 함수들이
+// Supabase가 없으면 곧바로 null/[]/false만 돌려주고 로컬 대체 수단이 전혀 없었던
+// 것이 원인 — learningLog가 "다 되는 것처럼" 보여줘서 실제로는 죽어있는 이어하기
+// 기능을 가려온 셈이다. learningLog와 같은 패턴(로컬에 즉시 기록 + 서버 응답과
+// updated_at 기준으로 병합)을 여기도 적용해 같은 기기 안에서는 Supabase 상태와
+// 무관하게 이어하기가 항상 동작하게 한다. 다른 기기 간 동기화는 여전히 Supabase가
+// 필요하다.
+// ---------------------------------------------------------------------------
+
+const LS_PROGRESS_PREFIX = "word_app_progress_";
+
+function progressLsKey(userId: string, part: string, fileKey: string): string {
+  return `${LS_PROGRESS_PREFIX}${userId}_${part}_${fileKey}`;
+}
+
+interface LsProgressRecord {
+  fileKey: string;
+  data: unknown;
+  updatedAt: string;
+}
+
+function writeLsProgress(userId: string, part: string, fileKey: string, data: unknown, updatedAt: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const rec: LsProgressRecord = { fileKey, data, updatedAt };
+    window.localStorage.setItem(progressLsKey(userId, part, fileKey), JSON.stringify(rec));
+  } catch {
+    // localStorage가 꽉 찼거나 비활성화된 경우 — 이 기기 안 이어하기만 못 쓰게 될 뿐,
+    // Supabase 저장은 별도로 시도되므로 조용히 무시한다.
+  }
+}
+
+function readLsProgress(userId: string, part: string, fileKey: string): LsProgressRecord | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(progressLsKey(userId, part, fileKey));
+    if (!raw) return null;
+    return JSON.parse(raw) as LsProgressRecord;
+  } catch {
+    return null;
+  }
+}
+
+function removeLsProgress(userId: string, part: string, fileKey: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(progressLsKey(userId, part, fileKey));
+  } catch {
+    /* 무시 */
+  }
+}
+
+/** 이 사용자·파트의 로컬 사본 전부를 읽는다(연습 파트처럼 파일 조합별로 여러 개 있을 수 있음). */
+function readAllLsProgress(userId: string, part: string): LsProgressRecord[] {
+  if (typeof window === "undefined") return [];
+  const prefix = `${LS_PROGRESS_PREFIX}${userId}_${part}_`;
+  const out: LsProgressRecord[] = [];
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key || !key.startsWith(prefix)) continue;
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        out.push(JSON.parse(raw) as LsProgressRecord);
+      } catch {
+        /* 손상된 항목은 건너뛴다 */
+      }
+    }
+  } catch {
+    return out;
+  }
+  return out;
+}
 
 // (user, part, fileKey)별로 직전 저장/삭제가 끝난 뒤에만 다음 것을 보내도록 체인으로
 // 묶는다. 단어를 빠르게 넘길 때마다 saveProgress가 fire-and-forget으로 연달아
@@ -27,6 +108,12 @@ function progressChainKey(userId: string, part: string, fileKey: string): string
 // "이어하기" 지점을 남기고 싶으면 fileKeyOf(paths) 값을 넘긴다.
 export async function saveProgress(userId: string, part: string, data: unknown, fileKey = ""): Promise<boolean> {
   if (!userId) return false;
+  // Supabase 응답을 기다리지 않고 이 기기에는 즉시 남겨둔다 — 동기화 저장소가
+  // 설정되지 않았거나 일시적으로 실패해도, 최소한 이 기기에서는 "이어서 연습하기"가
+  // 항상 되게 하기 위함이다(learningLog.ts의 로컬 사본과 같은 패턴).
+  const nowIso = new Date().toISOString();
+  writeLsProgress(userId, part, fileKey, data, nowIso);
+
   const key = progressChainKey(userId, part, fileKey);
   const prior = progressChains.get(key) ?? Promise.resolve();
   let ok = false;
@@ -41,9 +128,10 @@ export async function saveProgress(userId: string, part: string, data: unknown, 
       const { error } = await supabase
         .from("progress")
         .upsert(
-          { user_id: userId, part, file_key: fileKey, data, updated_at: new Date().toISOString() },
+          { user_id: userId, part, file_key: fileKey, data, updated_at: nowIso },
           { onConflict: "user_id,part,file_key" }
         );
+      logSupabaseError(`progress 저장(${part})`, error);
       ok = !error;
     });
   progressChains.set(key, run);
@@ -54,20 +142,28 @@ export async function saveProgress(userId: string, part: string, data: unknown, 
 export async function loadProgress<T>(userId: string, part: string, fileKey = ""): Promise<T | null> {
   if (!userId) return null;
   const supabase = await getSupabaseAsync();
-  if (!supabase) return null;
+  const local = readLsProgress(userId, part, fileKey);
+  if (!supabase) return (local?.data as T) ?? null;
   const { data, error } = await supabase
     .from("progress")
-    .select("data")
+    .select("data, updated_at")
     .eq("user_id", userId)
     .eq("part", part)
     .eq("file_key", fileKey)
     .maybeSingle();
-  if (error || !data) return null;
-  return data.data as T;
+  logSupabaseError(`progress 불러오기(${part})`, error);
+  const remote = !error && data ? { data: data.data as T, updatedAt: data.updated_at as string } : null;
+  // 로컬/서버 둘 다 있으면 더 최신인 쪽(예: 다른 기기에서 더 나중에 저장한 경우 서버가
+  // 이길 수도 있음)을 쓴다. 서버가 아예 응답을 못 했거나 행이 없으면 로컬로 대체한다.
+  if (remote && local) {
+    return new Date(remote.updatedAt).getTime() >= new Date(local.updatedAt).getTime() ? remote.data : (local.data as T);
+  }
+  return remote?.data ?? ((local?.data as T) ?? null);
 }
 
 export async function deleteProgress(userId: string, part: string, fileKey = ""): Promise<void> {
   if (!userId) return;
+  removeLsProgress(userId, part, fileKey);
   const key = progressChainKey(userId, part, fileKey);
   const prior = progressChains.get(key) ?? Promise.resolve();
   const run = prior
@@ -75,7 +171,8 @@ export async function deleteProgress(userId: string, part: string, fileKey = "")
     .then(async () => {
       const supabase = await getSupabaseAsync();
       if (!supabase) return;
-      await supabase.from("progress").delete().eq("user_id", userId).eq("part", part).eq("file_key", fileKey);
+      const { error } = await supabase.from("progress").delete().eq("user_id", userId).eq("part", part).eq("file_key", fileKey);
+      logSupabaseError(`progress 삭제(${part})`, error);
     });
   progressChains.set(key, run);
   await run;
@@ -93,21 +190,38 @@ export interface SavedProgressEntry<T> {
  */
 export async function listSavedProgress<T>(userId: string, part: string): Promise<SavedProgressEntry<T>[]> {
   if (!userId) return [];
+  const local = readAllLsProgress(userId, part);
   const supabase = await getSupabaseAsync();
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("progress")
-    .select("file_key, data, updated_at")
-    .eq("user_id", userId)
-    .eq("part", part)
-    .order("updated_at", { ascending: false })
-    .limit(20);
-  if (error || !data) return [];
-  return (data as { file_key: string; data: T; updated_at: string }[]).map((r) => ({
-    fileKey: r.file_key,
-    data: r.data,
-    updatedAt: r.updated_at,
-  }));
+
+  let remote: SavedProgressEntry<T>[] = [];
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("progress")
+      .select("file_key, data, updated_at")
+      .eq("user_id", userId)
+      .eq("part", part)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+    logSupabaseError(`이어서 하기 목록(${part})`, error);
+    if (!error && data) {
+      remote = (data as { file_key: string; data: T; updated_at: string }[]).map((r) => ({
+        fileKey: r.file_key,
+        data: r.data,
+        updatedAt: r.updated_at,
+      }));
+    }
+  }
+
+  // 같은 fileKey가 양쪽에 있으면 더 최신인 쪽을 남긴다(learningLog.ts의 병합과 동일한 방식).
+  const map = new Map<string, SavedProgressEntry<T>>();
+  for (const r of remote) map.set(r.fileKey, r);
+  for (const l of local) {
+    const existing = map.get(l.fileKey);
+    if (!existing || new Date(l.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+      map.set(l.fileKey, { fileKey: l.fileKey, data: l.data as T, updatedAt: l.updatedAt });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 export async function loadWrongNotes(userId: string): Promise<WordEntry[]> {
@@ -115,6 +229,7 @@ export async function loadWrongNotes(userId: string): Promise<WordEntry[]> {
   const supabase = await getSupabaseAsync();
   if (!supabase) return [];
   const { data, error } = await supabase.from("wrong_notes").select("words").eq("user_id", userId).maybeSingle();
+  logSupabaseError("오답 노트 불러오기", error);
   if (error || !data) return [];
   return (data.words as WordEntry[]) || [];
 }
@@ -138,6 +253,7 @@ async function writeWrongNotes(userId: string, words: WordEntry[]): Promise<bool
   const { error } = await supabase
     .from("wrong_notes")
     .upsert({ user_id: userId, words: dedupeWords(words), updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  logSupabaseError("오답 노트 저장", error);
   return !error;
 }
 
@@ -189,7 +305,8 @@ export async function appendStudyStat(userId: string, part: "practice" | "exam",
   const supabase = await getSupabaseAsync();
   if (!supabase) return;
   const date = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }); // YYYY-MM-DD
-  await supabase.from("study_stats").insert({ user_id: userId, date, part, total, correct });
+  const { error } = await supabase.from("study_stats").insert({ user_id: userId, date, part, total, correct });
+  logSupabaseError("학습 통계 기록", error);
 }
 
 export async function loadStudyStats(userId: string): Promise<StudyStatRecord[]> {
@@ -202,6 +319,7 @@ export async function loadStudyStats(userId: string): Promise<StudyStatRecord[]>
     .eq("user_id", userId)
     .order("created_at", { ascending: true })
     .limit(500);
+  logSupabaseError("학습 통계 불러오기", error);
   if (error || !data) return [];
   return data as StudyStatRecord[];
 }

@@ -1,7 +1,8 @@
 import { StudyMode, WordEntry } from "./types";
 
-// 연습을 몇 개 단위 "라운드"로 쪼개는 기준 (practice/page.tsx의 라운드 완료 화면도
-// 이 값을 그대로 쓴다 — round.ts류로 따로 빼기엔 이 상수 하나뿐이라 여기 둔다).
+// 연습을 몇 개 단위 "라운드"로 쪼개는 기본값. 사용자가 연습 화면의 설정(⚙)에서
+// 5~50개 사이로 바꿀 수 있고(useRoundSize), 바꾼 값은 requeuePosition에도 그대로
+// 전달된다 — 여기 상수는 "아직 아무것도 고르지 않았을 때의 기본값" 역할만 한다.
 export const ROUND_SIZE = 15;
 
 // 방금 채점한 단어가 다시 나오기 전에 최소 이만큼의 "다른" 단어가 사이에 껴야 한다.
@@ -23,7 +24,7 @@ const MIN_GAP = 3;
  * "순서"를 외워버리는 것을 방지한다. 두 경우 모두 MIN_GAP보다 가까운 위치는 절대
  * 뽑히지 않는다.
  */
-export function requeuePosition(queueLen: number, level: 40 | 0): number {
+export function requeuePosition(queueLen: number, level: 40 | 0, roundSize: number = ROUND_SIZE): number {
   if (queueLen === 0) return 0;
   // splice 삽입 위치는 0(맨 앞)부터 queueLen(맨 끝에 추가)까지 전부 유효하다 — 남은
   // 단어가 아주 적을 때도(예: 1개) "그 단어 다음"에 꽂을 수 있도록 queueLen까지 허용한다.
@@ -31,12 +32,12 @@ export function requeuePosition(queueLen: number, level: 40 | 0): number {
 
   if (level === 0) {
     const loIdx = clamp(MIN_GAP);
-    const hiIdx = Math.max(loIdx, clamp(ROUND_SIZE - 1));
+    const hiIdx = Math.max(loIdx, clamp(roundSize - 1));
     return loIdx + Math.floor(Math.random() * (hiIdx - loIdx + 1));
   }
 
-  const nextRound: [number, number] = [ROUND_SIZE, ROUND_SIZE * 2 - 1];
-  const laterRounds: [number, number] = [ROUND_SIZE * 2, ROUND_SIZE * 5 - 1];
+  const nextRound: [number, number] = [roundSize, roundSize * 2 - 1];
+  const laterRounds: [number, number] = [roundSize * 2, roundSize * 5 - 1];
   const [lo, hi] = Math.random() < 0.5 ? nextRound : laterRounds;
   const loIdx = clamp(Math.max(lo, MIN_GAP));
   const hiIdx = Math.max(loIdx, clamp(hi));

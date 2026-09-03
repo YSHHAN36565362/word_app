@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUserId } from "@/hooks/useUserId";
 import { useTheme } from "@/contexts/ThemeContext";
+import { DAILY_GOAL_MAX, DAILY_GOAL_MIN, goalStepFor, useDailyGoal } from "@/hooks/useDailyGoal";
 import { isSyncEnabled } from "@/lib/progress";
 import { deleteLearningLog, formatKstDateTime, listAllLearningLogs, LearningLogEntryWithPart, Part } from "@/lib/learningLog";
 import PageHeader from "@/components/PageHeader";
+import HintThemeSettings from "@/components/HintThemeSettings";
 
 const PART_LABEL: Record<Part, string> = {
   study: "학습",
@@ -18,6 +20,7 @@ const PART_LABEL: Record<Part, string> = {
 export default function SettingsPage() {
   const { userId, setUserId, ready } = useUserId();
   const { theme, toggleTheme } = useTheme();
+  const { goal, setGoal, adjustGoal } = useDailyGoal();
   const [input, setInput] = useState("");
   const [touched, setTouched] = useState(false);
   const [syncEnabled, setSyncEnabled] = useState(false);
@@ -78,6 +81,58 @@ export default function SettingsPage() {
         </span>
         <span style={{ color: "var(--text-muted)" }}>›</span>
       </Link>
+
+      <div className="mt-4 study-card p-4">
+        <div className="text-sm font-bold">오늘의 목표</div>
+        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+          하루에 몇 개의 단어를 채점할지 정합니다. 홈 화면의 진행 링이 이 목표를 기준으로
+          채워집니다. (이 기기에만 저장되고 학습 기록에는 영향을 주지 않습니다)
+        </p>
+        <div className="mt-3 flex items-center justify-center gap-3">
+          <button
+            onClick={() => adjustGoal(-goalStepFor(goal))}
+            disabled={goal <= DAILY_GOAL_MIN}
+            aria-label="목표 줄이기"
+            className="btn-3d btn-ghost h-9 w-12 text-base disabled:opacity-40"
+          >
+            −
+          </button>
+          <div className="min-w-20 text-center">
+            <div className="text-xl font-extrabold">{goal}개</div>
+            <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              하루 목표
+            </div>
+          </div>
+          <button
+            onClick={() => adjustGoal(goalStepFor(goal))}
+            disabled={goal >= DAILY_GOAL_MAX}
+            aria-label="목표 늘리기"
+            className="btn-3d btn-ghost h-9 w-12 text-base disabled:opacity-40"
+          >
+            +
+          </button>
+        </div>
+        <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+          {[30, 50, 100, 150, 200, 300].map((preset) => (
+            <button
+              key={preset}
+              onClick={() => setGoal(preset)}
+              className="rounded-full px-2.5 py-1 text-[11px] font-bold"
+              style={
+                goal === preset
+                  ? { background: "var(--accent)", color: "#fff" }
+                  : { background: "var(--hint-bg)", color: "var(--text-muted)" }
+              }
+            >
+              {preset}개
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <HintThemeSettings />
+      </div>
 
       <div className="mt-4 study-card p-4">
         <div className="text-sm font-bold">화면 테마</div>

@@ -42,8 +42,22 @@ export async function getSupabaseAsync(): Promise<SupabaseClient | null> {
   if (!url || !key) return null;
   try {
     client = createClient(url, key);
-  } catch {
+  } catch (e) {
+    console.error("[Supabase] createClient 실패 — URL/키 형식을 확인하세요:", e);
     return null;
   }
   return client;
+}
+
+/**
+ * "번호를 저장했는데 이어하기/동기화가 안 된다"는 문제는 대부분 여기 로그 한 줄로
+ * 원인이 드러난다 — 지금까지는 upsert/select 실패 시 반환값(false/null)만 조용히
+ * 돌려줘서, 브라우저 콘솔을 봐도 아무 단서가 없었다(예: progress 테이블의 기본키가
+ * 예전 스키마(user_id, part)로 남아있는데 코드는 (user_id, part, file_key)로 upsert를
+ * 시도하면 Postgrest가 "on conflict 대상과 일치하는 제약이 없다"는 에러를 주지만,
+ * 그 에러가 어디에도 찍히지 않았다). 앞으로는 실패할 때마다 콘솔에 원인을 남긴다.
+ */
+export function logSupabaseError(context: string, error: { message?: string; code?: string; details?: string } | null): void {
+  if (!error) return;
+  console.error(`[Supabase] ${context} 실패:`, error.code ? `(${error.code}) ${error.message}` : error, error.details ?? "");
 }
