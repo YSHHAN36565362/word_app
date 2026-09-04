@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SCORE_BTN_SCALE_MAX, SCORE_BTN_SCALE_MIN } from "@/hooks/useScoreButtonPrefs";
 import { ROUND_SIZE_MAX, ROUND_SIZE_MIN, ROUND_SIZE_STEP } from "@/hooks/useRoundSize";
 import { ROUND_SIZE } from "@/lib/queue";
+import { HINT_SCALE_MAX, HINT_SCALE_MIN, HINT_SCALE_STEP } from "@/lib/hintTheme";
 
 interface Props {
   roundSize: number;
@@ -16,6 +17,14 @@ interface Props {
   onSetScoreHidden: (next: boolean) => void;
   hideMascot: boolean;
   onSetHideMascot: (next: boolean) => void;
+  // 한자 부수 분해 등 힌트가 길어질수록 휴대폰 같은 작은 화면에서 잘 안 보인다는
+  // 요청으로, 힌트 구간 전체를 다루는 "글자 크기 설정" 화면까지 안 가도 연습
+  // 화면에서 바로 한자 크기를 키울 수 있게 했다. 처음 질문으로 나온 한자(카드 앞면)
+  // 크기도 힌트의 한자 분해 크기와 함께 조절된다 — 부모(practice/page.tsx)의
+  // onAdjustKanjiScale/onResetKanjiScale이 두 값을 같이 바꾼다.
+  kanjiScale: number;
+  onAdjustKanjiScale: (delta: number) => void;
+  onResetKanjiScale: () => void;
 }
 
 const chip = { background: "var(--hint-bg)", color: "var(--text-muted)" } as const;
@@ -75,6 +84,9 @@ export default function PracticeSettingsPopover({
   onSetScoreHidden,
   hideMascot,
   onSetHideMascot,
+  kanjiScale,
+  onAdjustKanjiScale,
+  onResetKanjiScale,
 }: Props) {
   const [open, setOpen] = useState(false);
 
@@ -131,6 +143,25 @@ export default function PracticeSettingsPopover({
               disabled={scale >= SCORE_BTN_SCALE_MAX}
             />
             <RoundBtn ariaLabel="채점 버튼 크기 기본값" label="기본값" wide onClick={onResetScale} />
+          </Row>
+
+          <Row label="한자 크기">
+            <RoundBtn
+              ariaLabel="한자 글자 작게"
+              label="−"
+              onClick={() => onAdjustKanjiScale(-HINT_SCALE_STEP)}
+              disabled={kanjiScale <= HINT_SCALE_MIN}
+            />
+            <span className="w-10 text-center text-[11px] font-bold" style={{ color: "var(--text)" }}>
+              {Math.round(kanjiScale * 100)}%
+            </span>
+            <RoundBtn
+              ariaLabel="한자 글자 크게"
+              label="+"
+              onClick={() => onAdjustKanjiScale(HINT_SCALE_STEP)}
+              disabled={kanjiScale >= HINT_SCALE_MAX}
+            />
+            <RoundBtn ariaLabel="한자 글자 크기 기본값" label="기본값" wide onClick={onResetKanjiScale} />
           </Row>
 
           <Row label="채점 버튼 표시">

@@ -1,6 +1,6 @@
 "use client";
 
-import { HintSectionKey, sectionOfLine } from "@/lib/hintTheme";
+import { HintSectionKey, HintTheme, sectionOfLine } from "@/lib/hintTheme";
 import { useHintTheme } from "@/hooks/useHintTheme";
 
 /**
@@ -14,8 +14,12 @@ import { useHintTheme } from "@/hooks/useHintTheme";
 const TAG_HEAD = /^(\s*\[[^\]]+\])(.*)$/;
 const KANJI_HEADER_TAG = /^\s*\[한자\d+\]/;
 
-export default function HintText({ text }: { text: string }) {
-  const { theme } = useHintTheme();
+export default function HintText({ text, theme: themeProp }: { text: string; theme?: HintTheme }) {
+  // 보통은 이 안에서 직접 저장값을 읽어오지만, 같은 화면에 힌트 크기를 즉시 조절하는
+  // 컨트롤(연습 화면 ⚙ 설정의 "한자 크기" 등)이 같이 떠 있을 때는 그 컨트롤이 들고 있는
+  // 살아있는 state를 그대로 넘겨받아써야, 조절하자마자(리마운트 없이) 바로 반영된다.
+  const ownHook = useHintTheme();
+  const theme = themeProp ?? ownHook.theme;
   const lines = text.split("\n");
 
   let section: HintSectionKey = "etc";

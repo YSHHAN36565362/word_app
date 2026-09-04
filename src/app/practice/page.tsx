@@ -27,6 +27,7 @@ import { useUserId } from "@/hooks/useUserId";
 import { useFontScale } from "@/hooks/useFontScale";
 import { useScoreButtonPrefs } from "@/hooks/useScoreButtonPrefs";
 import { useRoundSize } from "@/hooks/useRoundSize";
+import { useHintTheme } from "@/hooks/useHintTheme";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
@@ -200,6 +201,13 @@ function PracticePageInner() {
   // 라운드 크기(몇 개마다 완료 화면을 볼지). 한 번에 100~200개씩 하는 사람에게 15개
   // 고정은 너무 자주 끊긴다는 피드백에 따라 연습 화면 설정에서 직접 조절하게 했다.
   const { roundSize: userRoundSize, setRoundSize, adjustRoundSize } = useRoundSize();
+
+  // 힌트 테마(구간별 색·크기)를 이 화면에서 직접 들고 있는다 — ⚙ 설정의 "한자 힌트
+  // 크기"를 조절하면 그 즉시(리마운트 없이) 아래 HintText에도 반영되어야 하는데,
+  // HintText가 내부에서 따로 useHintTheme()을 부르면 서로 다른 state가 되어 조절
+  // 직후에는 반영이 안 보이고 화면을 다시 열어야만 보이는 문제가 생긴다. 그래서 여기서
+  // 하나만 만들어 HintText에 theme prop으로 그대로 넘긴다.
+  const { theme: hintTheme, update: updateHintTheme } = useHintTheme();
 
   // 이번 세션에서 어떤 채점을 몇 번 했는지 — 끝났을 때 요약 화면에 쓴다.
   const [tally, setTally] = useState<SessionTally>(EMPTY_TALLY);
@@ -656,6 +664,18 @@ function PracticePageInner() {
                     onResetScale={() => setScoreBtnScale(1)}
                     scoreHidden={scoreBtnsHidden}
                     onSetScoreHidden={setScoreBtnsHidden}
+                    kanjiScale={hintTheme.kanji.scale}
+                    onAdjustKanjiScale={(delta) => {
+                      // "한자 크기"는 힌트의 한자 분해 글자와, 카드 앞면에 크게 나오는
+                      // 질문(단어/한자) 글자를 함께 키운다 — 둘 다 "한자가 작아서 안
+                      // 보인다"는 같은 문제의 다른 부분이라 하나의 조절로 묶었다.
+                      updateHintTheme("kanji", { scale: hintTheme.kanji.scale + delta });
+                      adjustFontScale(delta);
+                    }}
+                    onResetKanjiScale={() => {
+                      updateHintTheme("kanji", { scale: 1 });
+                      setFontScale(1);
+                    }}
                     hideMascot={hideMascot}
                     onSetHideMascot={setHideMascot}
                   />
@@ -799,7 +819,7 @@ function PracticePageInner() {
                       className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 leading-relaxed whitespace-pre-line"
                       style={{ background: "var(--hint-bg)", color: "var(--text-muted)", fontSize: "calc(0.875rem * var(--practice-font-scale, 1))" }}
                     >
-                      <HintText text={current.hint} />
+                      <HintText text={current.hint} theme={hintTheme} />
                     </div>
                   )}
                 </div>

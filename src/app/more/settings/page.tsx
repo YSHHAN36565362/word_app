@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useUserId } from "@/hooks/useUserId";
 import { useTheme } from "@/contexts/ThemeContext";
 import { DAILY_GOAL_MAX, DAILY_GOAL_MIN, goalStepFor, useDailyGoal } from "@/hooks/useDailyGoal";
+import { useHintTheme } from "@/hooks/useHintTheme";
+import { useFontScale } from "@/hooks/useFontScale";
+import { HINT_SCALE_MAX, HINT_SCALE_MIN, HINT_SCALE_STEP, HINT_SECTIONS } from "@/lib/hintTheme";
 import { isSyncEnabled } from "@/lib/progress";
 import { deleteLearningLog, formatKstDateTime, listAllLearningLogs, LearningLogEntryWithPart, Part } from "@/lib/learningLog";
 import PageHeader from "@/components/PageHeader";
@@ -20,6 +23,29 @@ export default function SettingsPage() {
   const { userId, setUserId, ready } = useUserId();
   const { theme, toggleTheme } = useTheme();
   const { goal, setGoal, adjustGoal } = useDailyGoal();
+  // 한자 부수 분해가 길어질수록 휴대폰 같은 작은 화면에서 잘 안 보인다는 요청으로,
+  // 힌트 구간 전체를 다루는 "글자 크기 설정" 화면까지 안 가도 여기서 바로 한자 크기를
+  // 조절할 수 있게 했다. 힌트의 한자 분해 글자뿐 아니라, 연습 화면 카드 앞면에 크게
+  // 나오는 질문(단어/한자) 글자도 같이 조절한다 — "word_app_practice_font_scale"은
+  // 연습 화면과 "글자 크기 설정" 페이지의 "연습 화면" 행이 이미 공유하는 값이라, 여기서
+  // 같은 키로 저장해두면 다음에 연습 화면을 열 때 그대로 반영된다.
+  const { theme: hintTheme, update: updateHintTheme } = useHintTheme();
+  const { setFontScale: setPracticeFontScale, adjustFontScale: adjustPracticeFontScale } = useFontScale(
+    "word_app_practice_font_scale",
+    "--practice-font-scale"
+  );
+  const kanjiScale = hintTheme.kanji.scale;
+  const kanjiSample = HINT_SECTIONS.find((s) => s.key === "kanji")?.sample ?? "";
+
+  function adjustKanjiSize(delta: number) {
+    updateHintTheme("kanji", { scale: kanjiScale + delta });
+    adjustPracticeFontScale(delta);
+  }
+
+  function resetKanjiSize() {
+    updateHintTheme("kanji", { scale: 1 });
+    setPracticeFontScale(1);
+  }
   const [input, setInput] = useState("");
   const [touched, setTouched] = useState(false);
   const [syncEnabled, setSyncEnabled] = useState(false);
@@ -139,6 +165,52 @@ export default function SettingsPage() {
         </span>
         <span style={{ color: "var(--text-muted)" }}>›</span>
       </Link>
+
+      <div className="mt-4 study-card p-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-bold">한자 크기</div>
+          <button onClick={resetKanjiSize} className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: "var(--hint-bg)", color: "var(--text-muted)" }}>
+            기본값
+          </button>
+        </div>
+        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+          연습 화면에서 처음 질문으로 크게 나오는 한자와, 힌트의 한자 부수 분해(음독·
+          훈독·어원 등) 글자 크기를 함께 조절합니다. 부수가 많은 한자일수록 휴대폰 같은
+          작은 화면에서 잘 안 보인다는 의견을 반영했습니다. 다른 힌트 구간의 색상·크기는
+          위 &ldquo;글자 크기 설정&rdquo;에서 따로 조절할 수 있어요. (이 기기에만
+          저장되고 학습 기록에는 영향을 주지 않습니다)
+        </p>
+        <div className="mt-3 flex items-center justify-center gap-3">
+          <button
+            onClick={() => adjustKanjiSize(-HINT_SCALE_STEP)}
+            disabled={kanjiScale <= HINT_SCALE_MIN}
+            aria-label="한자 크기 줄이기"
+            className="btn-3d btn-ghost h-9 w-12 text-base disabled:opacity-40"
+          >
+            −
+          </button>
+          <div className="min-w-20 text-center">
+            <div className="text-xl font-extrabold">{Math.round(kanjiScale * 100)}%</div>
+            <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              한자 크기
+            </div>
+          </div>
+          <button
+            onClick={() => adjustKanjiSize(HINT_SCALE_STEP)}
+            disabled={kanjiScale >= HINT_SCALE_MAX}
+            aria-label="한자 크기 늘리기"
+            className="btn-3d btn-ghost h-9 w-12 text-base disabled:opacity-40"
+          >
+            +
+          </button>
+        </div>
+        <div
+          className="mt-3 truncate rounded-lg px-3 py-2 text-center"
+          style={{ background: "var(--hint-bg)", color: "var(--text-muted)", fontSize: `calc(0.8rem * ${kanjiScale})` }}
+        >
+          {kanjiSample}
+        </div>
+      </div>
 
       <div className="mt-4 study-card p-4">
         <div className="text-sm font-bold">화면 테마</div>
