@@ -124,6 +124,10 @@ function PracticePageInner() {
   // 예전엔 파트당 슬롯이 하나뿐이라 다른 조합을 새로 시작하면 이전 진행이 사라진
   // 것처럼 보이는 문제가 있었다 — 여러 조합을 동시에 이어할 수 있게 배열로 들고 있는다.
   const [savedList, setSavedList] = useState<SavedProgressEntry<PracticeProgress>[]>([]);
+  // 번호가 저장돼 있으면 서버에서 이 목록을 불러오는 동안(잠깐 걸림) 화면 맨 위가
+  // 비어 있다가 갑자기 카드가 나타나 보이던 것을, 불러오는 동안에는 로딩 표시를,
+  // 끝나면 목록 또는 "저장된 데이터가 없습니다" 안내를 보여주도록 바꿨다.
+  const [savedListLoading, setSavedListLoading] = useState(false);
 
   const [queue, setQueue] = useState<WordEntry[]>([]);
   const [current, setCurrent] = useState<WordEntry | null>(null);
@@ -216,8 +220,11 @@ function PracticePageInner() {
 
   useEffect(() => {
     if (!ready || !userId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSavedListLoading(true);
     listSavedProgress<PracticeProgress>(userId, "practice").then((list) => {
       setSavedList(list.filter((e) => e.data && (e.data.queue?.length || e.data.currentWord)));
+      setSavedListLoading(false);
     });
   }, [ready, userId]);
 
@@ -870,7 +877,22 @@ function PracticePageInner() {
         </div>
       )}
 
-      {savedList.length > 0 && (
+      {ready && userId && savedListLoading && (
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+            이어서 연습하기 불러오는 중...
+          </div>
+          <div className="study-card flex items-center gap-3 p-4">
+            <Spinner size={20} />
+            <div className="flex-1 animate-pulse">
+              <div className="h-3 w-2/5 rounded-full" style={{ background: "var(--hint-bg)" }} />
+              <div className="mt-3 h-9 w-full rounded-xl" style={{ background: "var(--hint-bg)" }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!savedListLoading && savedList.length > 0 && (
         <div className="mt-4 flex flex-col gap-2">
           <div className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
             이어서 연습하기 ({savedList.length}개)
@@ -885,6 +907,15 @@ function PracticePageInner() {
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {ready && userId && !savedListLoading && savedList.length === 0 && (
+        <div
+          className="mt-4 rounded-xl px-4 py-3 text-sm font-bold"
+          style={{ background: "var(--hint-bg)", color: "var(--blue)", border: "1.5px solid var(--blue)" }}
+        >
+          저장된 데이터가 없습니다.
         </div>
       )}
 
