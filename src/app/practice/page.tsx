@@ -28,6 +28,7 @@ import { useFontScale } from "@/hooks/useFontScale";
 import { useScoreButtonPrefs } from "@/hooks/useScoreButtonPrefs";
 import { useRoundSize } from "@/hooks/useRoundSize";
 import { useHintTheme } from "@/hooks/useHintTheme";
+import { DEFAULT_HINT_THEME } from "@/lib/hintTheme";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
@@ -666,14 +667,17 @@ function PracticePageInner() {
                     onSetScoreHidden={setScoreBtnsHidden}
                     kanjiScale={hintTheme.kanji.scale}
                     onAdjustKanjiScale={(delta) => {
-                      // "한자 크기"는 힌트의 한자 분해 글자와, 카드 앞면에 크게 나오는
-                      // 질문(단어/한자) 글자를 함께 키운다 — 둘 다 "한자가 작아서 안
-                      // 보인다"는 같은 문제의 다른 부분이라 하나의 조절로 묶었다.
+                      // "한자 크기"는 세 가지를 함께 키운다: 카드 앞면에 크게 나오는
+                      // 질문(단어/한자), 힌트의 [한자1]/[한자2]… 제목 줄, 그 아래
+                      // 한자 분해(음독/훈독/어원) 본문 — 전부 "한자가 작아서 안 보인다"는
+                      // 같은 문제의 다른 부분이라 하나의 조절로 묶었다.
                       updateHintTheme("kanji", { scale: hintTheme.kanji.scale + delta });
+                      updateHintTheme("kanjiHeader", { scale: hintTheme.kanjiHeader.scale + delta });
                       adjustFontScale(delta);
                     }}
                     onResetKanjiScale={() => {
                       updateHintTheme("kanji", { scale: 1 });
+                      updateHintTheme("kanjiHeader", { scale: DEFAULT_HINT_THEME.kanjiHeader.scale });
                       setFontScale(1);
                     }}
                     hideMascot={hideMascot}

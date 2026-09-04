@@ -19,9 +19,10 @@ interface Props {
   onSetHideMascot: (next: boolean) => void;
   // 한자 부수 분해 등 힌트가 길어질수록 휴대폰 같은 작은 화면에서 잘 안 보인다는
   // 요청으로, 힌트 구간 전체를 다루는 "글자 크기 설정" 화면까지 안 가도 연습
-  // 화면에서 바로 한자 크기를 키울 수 있게 했다. 처음 질문으로 나온 한자(카드 앞면)
-  // 크기도 힌트의 한자 분해 크기와 함께 조절된다 — 부모(practice/page.tsx)의
-  // onAdjustKanjiScale/onResetKanjiScale이 두 값을 같이 바꾼다.
+  // 화면에서 바로 한자 크기를 키울 수 있게 했다. 처음 질문으로 나온 한자(카드 앞면),
+  // 힌트의 [한자1]/[한자2]… 제목 줄, 그 아래 한자 분해 본문까지 세 가지가 함께
+  // 조절된다 — 부모(practice/page.tsx)의 onAdjustKanjiScale/onResetKanjiScale이
+  // 세 값을 같이 바꾼다.
   kanjiScale: number;
   onAdjustKanjiScale: (delta: number) => void;
   onResetKanjiScale: () => void;
