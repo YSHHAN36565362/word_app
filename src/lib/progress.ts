@@ -201,7 +201,11 @@ export async function listSavedProgress<T>(userId: string, part: string): Promis
       .eq("user_id", userId)
       .eq("part", part)
       .order("updated_at", { ascending: false })
-      .limit(20);
+      // 20이었을 때는 파일 조합을 많이 넘나드는 사람이 오래전에 시작해 아직 안 끝낸
+      // 조합이 "최근 순 20개" 밖으로 밀려나 이어서 연습하기 목록에서 통째로 사라져
+      // 보이는 문제가 있었다(학습 기록 관리에는 남아있는데 이어서 하기엔 없어 보임).
+      // learning_log 쪽 상한(100)과 맞춰 여유를 크게 뒀다.
+      .limit(100);
     logSupabaseError(`이어서 하기 목록(${part})`, error);
     if (!error && data) {
       remote = (data as { file_key: string; data: T; updated_at: string }[]).map((r) => ({

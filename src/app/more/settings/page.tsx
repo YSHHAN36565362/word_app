@@ -8,7 +8,7 @@ import { DAILY_GOAL_MAX, DAILY_GOAL_MIN, goalStepFor, useDailyGoal } from "@/hoo
 import { useHintTheme } from "@/hooks/useHintTheme";
 import { useFontScale } from "@/hooks/useFontScale";
 import { DEFAULT_HINT_THEME, HINT_SCALE_MAX, HINT_SCALE_MIN, HINT_SCALE_STEP, HINT_SECTIONS } from "@/lib/hintTheme";
-import { isSyncEnabled } from "@/lib/progress";
+import { deleteProgress, isSyncEnabled } from "@/lib/progress";
 import { deleteLearningLog, formatKstDateTime, listAllLearningLogs, LearningLogEntryWithPart, Part } from "@/lib/learningLog";
 import PageHeader from "@/components/PageHeader";
 
@@ -78,9 +78,19 @@ export default function SettingsPage() {
 
   async function handleDeleteLog(entry: LearningLogEntryWithPart) {
     const key = `${entry.part}::${entry.fileKey}`;
-    if (!window.confirm(`"${entry.fileSummary}" (${PART_LABEL[entry.part]}) 학습 기록을 삭제할까요?\n진행률과 최근 학습 시간이 초기화됩니다.`)) return;
+    const extraNote = entry.part === "practice" ? " 이어서 연습하기 카드에서도 사라집니다." : "";
+    if (!window.confirm(`"${entry.fileSummary}" (${PART_LABEL[entry.part]}) 학습 기록을 삭제할까요?\n진행률과 최근 학습 시간이 초기화됩니다.${extraNote}`)) return;
     setDeletingKey(key);
     await deleteLearningLog(userId, entry.part, entry.fileKey);
+    // learning_log(요약 기록)만 지우고 progress(실제 이어하기 큐)는 그대로 둬서,
+    // 여기서 삭제해도 연습 화면의 "이어서 연습하기" 카드에는 그 조합이 계속 남아있는
+    // 문제가 있었다. 연습 파트는 파일 조합별로 독립된 슬롯(file_key=파일 조합)을
+    // 쓰므로 같은 키로 같이 지운다 — 학습/시험/지문은 파트당 슬롯이 하나뿐이라
+    // (file_key="") 여기서 넘어온 파일 조합과 실제로 같은 진행인지 구분할 수 없어,
+    // 잘못 지우는 걸 피하려고 지금은 연습 파트만 같이 지운다.
+    if (entry.part === "practice") {
+      await deleteProgress(userId, "practice", entry.fileKey);
+    }
     setLogs((prev) => prev.filter((l) => !(l.part === entry.part && l.fileKey === entry.fileKey)));
     setDeletingKey("");
   }
