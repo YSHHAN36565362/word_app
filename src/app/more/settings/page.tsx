@@ -55,6 +55,10 @@ export default function SettingsPage() {
   const [syncEnabled, setSyncEnabled] = useState(false);
   const [logs, setLogs] = useState<LearningLogEntryWithPart[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  // listAllLearningLogs()가 실패(reject)하면 예전에는 .then()이 아예 안 불려서
+  // logsLoading이 true인 채로 영원히 "불러오는 중..."만 보였다 — 실패도 잡아서
+  // 로딩을 끝내고 이 상태로 안내 문구 + "다시 시도" 버튼을 보여준다.
+  const [logsError, setLogsError] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string>("");
 
   const displayValue = touched ? input : userId;
@@ -65,14 +69,26 @@ export default function SettingsPage() {
     isSyncEnabled().then(setSyncEnabled);
   }, []);
 
+  function loadLogs() {
+    if (!userId) return;
+    setLogsLoading(true);
+    setLogsError(false);
+    listAllLearningLogs(userId)
+      .then((data) => {
+        setLogs(data);
+        setLogsLoading(false);
+      })
+      .catch(() => {
+        setLogsLoading(false);
+        setLogsError(true);
+      });
+  }
+
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!ready || !userId) return;
-    setLogsLoading(true);
-    listAllLearningLogs(userId).then((data) => {
-      setLogs(data);
-      setLogsLoading(false);
-    });
+    loadLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, userId]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -294,13 +310,22 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {!logsLoading && logs.length === 0 && (
+          {!logsLoading && logsError && (
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: "var(--hint-bg)", color: "var(--red)" }}>
+              <span>학습 기록을 불러오지 못했어요. 네트워크 상태를 확인해주세요.</span>
+              <button onClick={loadLogs} className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: "var(--card)", color: "var(--text)" }}>
+                다시 시도
+              </button>
+            </div>
+          )}
+
+          {!logsLoading && !logsError && logs.length === 0 && (
             <div className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
               저장된 학습 기록이 없습니다.
             </div>
           )}
 
-          {!logsLoading && logs.length > 0 && (
+          {!logsLoading && !logsError && logs.length > 0 && (
             <div className="mt-3 flex flex-col gap-2">
               {logs.map((entry) => {
                 const key = `${entry.part}::${entry.fileKey}`;

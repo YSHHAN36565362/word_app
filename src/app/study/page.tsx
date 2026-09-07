@@ -12,7 +12,7 @@ import Spinner from "@/components/Spinner";
 import SessionInfoPanel from "@/components/SessionInfoPanel";
 import PageHeader from "@/components/PageHeader";
 import Confetti from "@/components/Confetti";
-import SpeakButton from "@/components/SpeakButton";
+import SpeakButton, { speak } from "@/components/SpeakButton";
 import MemoPad from "@/components/MemoPad";
 import HintText from "@/components/HintText";
 import FontSizeControl from "@/components/FontSizeControl";
@@ -194,15 +194,21 @@ export default function StudyPage() {
   const revealHint = () => {
     if (words[index]?.hint.trim()) setShowHint(true);
   };
+  const speakCurrent = () => {
+    const w = words[index];
+    if (w) speak(w.word);
+  };
   useKeyboardShortcuts(
     {
       ArrowRight: () => next(),
       ArrowLeft: () => prev(),
-      // h는 한글/일본어 자판일 때 e.key가 "h"로 안 잡혀서 안 먹힐 수 있다 — KeyH(물리
-      // 키 코드, 자판과 무관)와 Space를 대안으로 추가해 항상 힌트를 열 수 있게 한다.
+      // h/s는 한글/일본어 자판일 때 e.key가 그대로 안 잡혀서 안 먹힐 수 있다 —
+      // KeyH/KeyS(물리 키 코드, 자판과 무관)를 대안으로 추가해 항상 동작하게 한다.
       h: revealHint,
       KeyH: revealHint,
       " ": revealHint,
+      s: speakCurrent,
+      KeyS: speakCurrent,
     },
     focus && !done
   );
@@ -260,7 +266,10 @@ export default function StudyPage() {
                 <div className="text-center font-extrabold" style={{ color: "var(--blue)", fontSize: "calc(1.5rem * var(--study-font-scale, 1))" }}>
                   {current.word}
                 </div>
-                <SpeakButton text={current.word} compact />
+                <span className="flex items-center">
+                  <SpeakButton text={current.word} compact />
+                  <KeyBadge>S</KeyBadge>
+                </span>
                 <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
                   {favorites.has(wordKey(current)) ? "★" : "☆"}
                 </button>
@@ -330,7 +339,7 @@ export default function StudyPage() {
         subtitle="단어를 순서대로 넘기며 훑어보는 1회독입니다."
       />
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-        단축키: ←/→=이전/다음 단어 · H/Space=힌트 보기
+        단축키: ←/→=이전/다음 단어 · H/Space=힌트 보기 · S=발음 듣기
       </p>
 
       {ready && !userId && (

@@ -15,7 +15,7 @@ import SessionInfoPanel from "@/components/SessionInfoPanel";
 import PageHeader from "@/components/PageHeader";
 import Confetti from "@/components/Confetti";
 import FeedbackFlash from "@/components/FeedbackFlash";
-import SpeakButton from "@/components/SpeakButton";
+import SpeakButton, { speak } from "@/components/SpeakButton";
 import MemoPad from "@/components/MemoPad";
 import HintText from "@/components/HintText";
 import FontSizeControl from "@/components/FontSizeControl";
@@ -33,7 +33,7 @@ import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, resetWordMastery, saveWordMastery } from "@/lib/mastery";
-import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
+import { deleteLearningLog, fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, loadFavorites, removeFavorite } from "@/lib/favorites";
 import { FileRef, isItSelection, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
 
@@ -130,6 +130,9 @@ function PracticePageInner() {
   // 비어 있다가 갑자기 카드가 나타나 보이던 것을, 불러오는 동안에는 로딩 표시를,
   // 끝나면 목록 또는 "저장된 데이터가 없습니다" 안내를 보여주도록 바꿨다.
   const [savedListLoading, setSavedListLoading] = useState(false);
+  // "이어서 연습하기" 카드를 직접 삭제하는 중인 fileKey — 설정의 "학습 기록 관리"까지
+  // 안 가도 여기서 바로 0개짜리 등 필요 없는 진행을 지울 수 있게 했다.
+  const [deletingSavedKey, setDeletingSavedKey] = useState<string>("");
 
   const [queue, setQueue] = useState<WordEntry[]>([]);
   const [current, setCurrent] = useState<WordEntry | null>(null);
@@ -383,6 +386,19 @@ function PracticePageInner() {
     setFocus(true);
   }
 
+  // "이어서 연습하기" 카드를 시작 화면에서 바로 지운다 — 0개짜리 등 필요 없는
+  // 진행이 쌓여도 설정 화면까지 안 가고 여기서 정리할 수 있게 했다. 학습 기록
+  // 관리에서 지울 때와 마찬가지로 progress·learning_log 둘 다 같이 지운다.
+  async function deleteSavedEntry(entry: SavedProgressEntry<PracticeProgress>) {
+    if (!userId) return;
+    const summary = fileSummaryOf(entry.data.filesLabel);
+    if (!window.confirm(`"${summary}" 이어서 연습하기 기록을 삭제할까요?\n진행률이 초기화됩니다.`)) return;
+    setDeletingSavedKey(entry.fileKey);
+    await Promise.all([deleteProgress(userId, "practice", entry.fileKey), deleteLearningLog(userId, "practice", entry.fileKey)]);
+    setSavedList((prev) => prev.filter((e) => e.fileKey !== entry.fileKey));
+    setDeletingSavedKey("");
+  }
+
   // 복원 요청이 들어오면, FileSelector가 그 파일들을 실제 체크박스 선택(selectedFiles)으로
   // 반영할 때까지 기다린다. [이 학습 다시 하기]처럼 autoStart가 true면 저장돼 있던
   // 모드로 그대로 연습을 시작하고, 연습을 마치고 나왔을 때처럼 false면 체크박스와
@@ -590,6 +606,11 @@ function PracticePageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished, userId, resultSaved, total]);
 
+  function speakOrScoreUnknown() {
+    if (showAnswer) score(0);
+    else if (current) speak(current.word);
+  }
+
   useKeyboardShortcuts(
     {
       " ": () => { if (!showAnswer) revealAnswer(); },
@@ -603,9 +624,12 @@ function PracticePageInner() {
       ArrowDown: () => { if (showAnswer) score(0); },
       ArrowLeft: () => { if (showAnswer) score(60); },
       ArrowRight: () => { if (showAnswer) score(40); },
-      // WASD도 방향키와 같은 배치(W=위, S=아래, A=왼쪽, D=오른쪽).
+      // WASD도 방향키와 같은 배치(W=위, S=아래, A=왼쪽, D=오른쪽). S는 답을 아직
+      // 안 열었을 때(score(0)가 원래 아무 동작도 안 하던 순간)는 대신 발음을
+      // 들려준다 — 채점 단축키와 겹치지 않으면서 발음 듣기도 키보드로 쓸 수 있게.
       w: () => { if (showAnswer) score(100); },
-      s: () => { if (showAnswer) score(0); },
+      s: speakOrScoreUnknown,
+      KeyS: speakOrScoreUnknown,
       a: () => { if (showAnswer) score(60); },
       d: () => { if (showAnswer) score(40); },
       // 오른쪽 숫자 키패드(8/2/4/6)도 같은 배치 — code로 매칭해서 NumLock 상태와
@@ -783,7 +807,10 @@ function PracticePageInner() {
               <div className="mr-1">
                 <FontSizeControl fontScale={fontScale} onAdjust={adjustFontScale} onReset={() => setFontScale(1)} />
               </div>
-              <SpeakButton text={current.word} compact />
+              <span className="flex items-center">
+                <SpeakButton text={current.word} compact />
+                <KeyBadge>S</KeyBadge>
+              </span>
               <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
                 {favorites.has(wordKey(current)) ? "★" : "☆"}
               </button>
@@ -885,7 +912,7 @@ function PracticePageInner() {
       </div>
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
         단축키: Space/Enter=정답 확인 · 1~4=모름·헷갈림·조금앎·완벽함 · ↑/W/Num8=완벽함 ·
-        ↓/S/Num2=모름 · ←/A/Num4=조금앎 · →/D/Num6=헷갈림
+        ↓/S/Num2=모름 · ←/A/Num4=조금앎 · →/D/Num6=헷갈림 · S(답 열기 전)=발음 듣기
       </p>
 
       {ready && !userId && (
@@ -923,8 +950,19 @@ function PracticePageInner() {
           </div>
           {savedList.map((entry) => (
             <div key={entry.fileKey} className="study-card p-4">
-              <div className="text-sm truncate" title={fileSummaryOf(entry.data.filesLabel)}>
-                {fileSummaryOf(entry.data.filesLabel)} · 완료 {entry.data.doneCount} / {entry.data.totalCount}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 text-sm truncate" title={fileSummaryOf(entry.data.filesLabel)}>
+                  {fileSummaryOf(entry.data.filesLabel)} · 완료 {entry.data.doneCount} / {entry.data.totalCount}
+                </div>
+                <button
+                  onClick={() => deleteSavedEntry(entry)}
+                  disabled={deletingSavedKey === entry.fileKey}
+                  aria-label="이어서 연습하기 기록 삭제"
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold disabled:opacity-40"
+                  style={{ background: "var(--hint-bg)", color: "var(--red)" }}
+                >
+                  {deletingSavedKey === entry.fileKey ? "..." : "삭제"}
+                </button>
               </div>
               <button onClick={() => resume(entry.data)} className="btn-3d btn-blue mt-3 w-full text-sm">
                 이어서 연습하기

@@ -5,7 +5,9 @@
  * 동작하고, 일본어 단어장 앱에서 뜻만 외우고 발음은 놓치기 쉬운 부분을 보완해준다.
  * 지원하지 않는 브라우저에서는 조용히 아무 동작도 하지 않는다.
  */
-function speak(text: string, lang: string) {
+// 학습/연습 화면에서 S 단축키로도 같은 동작을 트리거할 수 있도록 내보낸다(버튼
+// 클릭을 흉내내지 않고 이 함수를 직접 부른다).
+export function speak(text: string, lang: string = "ja-JP") {
   if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
   window.speechSynthesis.cancel(); // 이전 발화가 남아있으면 먼저 끊는다
   const utter = new SpeechSynthesisUtterance(text);
@@ -36,10 +38,10 @@ export default function SpeakButton({ text, lang = "ja-JP", compact = false }: P
       <button
         onClick={() => speak(text, lang)}
         aria-label="발음 듣기"
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
         style={{ color: "var(--text-muted)" }}
       >
-        <SpeakerIcon size={16} />
+        <SpeakerIcon size={22} />
       </button>
     );
   }
