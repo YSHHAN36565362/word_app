@@ -267,7 +267,21 @@ export async function listSavedProgress<T>(userId: string, part: string): Promis
       map.set(key, { fileKey: l.fileKey, deviceId: myDeviceId, deviceLabel: getDeviceLabel(), data: l.data as T, updatedAt: l.updatedAt, isThisDevice: true });
     }
   }
-  return Array.from(map.values()).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  // device_id가 기본키에 추가되기 전에 남은 device_id='' 레거시 행이, 이후 실제
+  // 기기가 같은 조합을 이어서 저장해도 지워지지 않고 중복으로 남는 문제를 없앤다
+  // (learningLog.ts의 dropSupersededLegacyRows와 같은 이유·같은 방식).
+  const doneCountOf = (data: T): number => (data as { doneCount?: number }).doneCount ?? 0;
+  const bestByFileKey = new Map<string, number>();
+  for (const e of map.values()) {
+    if (!e.deviceId) continue;
+    bestByFileKey.set(e.fileKey, Math.max(bestByFileKey.get(e.fileKey) ?? -1, doneCountOf(e.data)));
+  }
+  const deduped = Array.from(map.values()).filter((e) => {
+    if (e.deviceId) return true;
+    const best = bestByFileKey.get(e.fileKey);
+    return best === undefined || best < doneCountOf(e.data);
+  });
+  return deduped.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 export async function loadWrongNotes(userId: string): Promise<WordEntry[]> {

@@ -97,6 +97,29 @@ function readAllLsRecords(userId: string, part?: Part): LsRecord[] {
   return out;
 }
 
+/** device_id가 기본키에 추가되기 전(마이그레이션 이전)에 남은 device_id=''
+ * 레거시 행이, 이후 실제 기기가 같은 조합을 이어서 저장해도 지워지지 않고 화면에
+ * 중복으로 남는 문제를 없앤다 — 같은 (그룹키)에 진행 개수가 레거시 기록 이상인
+ * 기기별 행이 하나라도 있으면 그 레거시 행은 이미 따라잡힌 것이므로 숨긴다.
+ * 어떤 기기도 레거시 기록만큼 진행하지 못했다면(레거시 쪽이 더 앞서 있다면) 정보
+ * 손실을 막기 위해 그대로 남겨둔다. */
+function dropSupersededLegacyRows<T extends { fileKey: string; deviceId: string; doneCount: number }>(
+  entries: T[],
+  groupKeyOf: (e: T) => string
+): T[] {
+  const bestByGroup = new Map<string, number>();
+  for (const e of entries) {
+    if (!e.deviceId) continue;
+    const key = groupKeyOf(e);
+    bestByGroup.set(key, Math.max(bestByGroup.get(key) ?? -1, e.doneCount));
+  }
+  return entries.filter((e) => {
+    if (e.deviceId) return true;
+    const best = bestByGroup.get(groupKeyOf(e));
+    return best === undefined || best < e.doneCount;
+  });
+}
+
 /** 같은 (fileKey, deviceId) 조합이 양쪽에 있으면 updated_at이 더 최신인 쪽을
  * 남긴다 — 다른 기기의 기록은 절대 하나로 합치지 않고 전부 별도 항목으로 둔다. */
 function mergeByFileKey(remote: LearningLogEntry[], local: LearningLogEntry[]): LearningLogEntry[] {
@@ -109,7 +132,8 @@ function mergeByFileKey(remote: LearningLogEntry[], local: LearningLogEntry[]): 
       map.set(key, l);
     }
   }
-  return Array.from(map.values()).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  const merged = dropSupersededLegacyRows(Array.from(map.values()), (e) => e.fileKey);
+  return merged.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 function mergeByPartAndFileKey(remote: LearningLogEntryWithPart[], local: LsRecord[]): LearningLogEntryWithPart[] {
@@ -122,7 +146,8 @@ function mergeByPartAndFileKey(remote: LearningLogEntryWithPart[], local: LsReco
       map.set(key, l);
     }
   }
-  return Array.from(map.values()).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  const merged = dropSupersededLegacyRows(Array.from(map.values()), (e) => `${e.part}::${e.fileKey}`);
+  return merged.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 /** 로컬에만 있고 서버보다 최신인 기록을 뒤늦게 서버로 밀어넣는다 — 다른 기기에서도 보이게 한다. 실패해도 화면엔 영향 없다. */
