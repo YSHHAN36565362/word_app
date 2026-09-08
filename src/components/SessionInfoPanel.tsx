@@ -9,7 +9,7 @@ interface Props {
   ready: boolean;
   part: Part;
   selectedFiles: FileRef[];
-  onRestore?: (paths: string[], mode: string | null) => void;
+  onRestore?: (paths: string[], mode: string | null, deviceId: string) => void;
 }
 
 /**
@@ -20,6 +20,10 @@ interface Props {
  * 자리에 [이 학습 다시 하기] 버튼이 뜬다 — 누르면 그 파일 조합과 마지막 모드로 곧장
  * 단어 화면까지 자동 진입한다.
  */
+function logKey(l: LearningLogEntry): string {
+  return `${l.fileKey}::${l.deviceId}`;
+}
+
 export default function SessionInfoPanel({ userId, ready, part, selectedFiles, onRestore }: Props) {
   const [logs, setLogs] = useState<LearningLogEntry[]>([]);
   const [viewingKey, setViewingKey] = useState<string>(""); // "" = 현재 선택된 파일 기준
@@ -31,9 +35,12 @@ export default function SessionInfoPanel({ userId, ready, part, selectedFiles, o
 
   const currentKey = fileKeyOf(selectedFiles.map((f) => f.path));
   const currentLabel = fileSummaryOf(selectedFiles.map((f) => f.label));
-  const currentLog = logs.find((l) => l.fileKey === currentKey);
+  // 지금 선택한 파일과 같은 조합이 여러 기기에 있으면, 일단 "이 기기"의 기록을
+  // 우선 보여준다(없으면 그중 가장 최근 것).
+  const currentCandidates = logs.filter((l) => l.fileKey === currentKey);
+  const currentLog = currentCandidates.find((l) => l.isThisDevice) ?? currentCandidates[0];
 
-  const viewed = viewingKey ? logs.find((l) => l.fileKey === viewingKey) : undefined;
+  const viewed = viewingKey ? logs.find((l) => logKey(l) === viewingKey) : undefined;
   const displaySummary = viewed ? viewed.fileSummary : currentLabel || "선택된 파일 없음";
   const displayLog = viewed ?? currentLog;
   const percent = displayLog && displayLog.totalCount > 0 ? Math.round((displayLog.doneCount / displayLog.totalCount) * 100) : 0;
@@ -41,14 +48,20 @@ export default function SessionInfoPanel({ userId, ready, part, selectedFiles, o
 
   return (
     <div className="mt-4 study-card p-4">
-      <div className="grid grid-cols-2 gap-y-2 text-xs">
+      <div className="grid grid-cols-[auto_1fr] gap-y-2 text-xs">
         <span style={{ color: "var(--text-muted)" }}>내 번호</span>
         <span className="text-right font-bold">{ready && userId ? userId : "설정 안 됨"}</span>
 
-        <span style={{ color: "var(--text-muted)" }}>선택된 파일</span>
-        <span className="text-right font-bold truncate" title={displaySummary}>
-          {displaySummary}
+        <span className="shrink-0" style={{ color: "var(--text-muted)" }}>
+          선택된 파일
         </span>
+        {/* 파일 이름이 길면 잘려서 안 보이던 것을, 가로 스크롤로 전부 볼 수 있게 했다. */}
+        <div className="min-w-0 overflow-x-auto text-right">
+          <span className="whitespace-nowrap font-bold">{displaySummary}</span>
+        </div>
+
+        <span style={{ color: "var(--text-muted)" }}>기기</span>
+        <span className="text-right font-bold">{displayLog ? `${displayLog.deviceLabel}${displayLog.isThisDevice ? " (이 기기)" : ""}` : "-"}</span>
 
         <span style={{ color: "var(--text-muted)" }}>최근 학습</span>
         <span className="text-right font-bold">{displayLog ? formatKstDateTime(displayLog.updatedAt) : "기록 없음"}</span>
@@ -79,8 +92,9 @@ export default function SessionInfoPanel({ userId, ready, part, selectedFiles, o
           >
             <option value="">현재 선택한 파일 기준</option>
             {logs.map((l) => (
-              <option key={l.fileKey} value={l.fileKey}>
-                {l.fileSummary} · {formatKstDateTime(l.updatedAt)}
+              <option key={logKey(l)} value={logKey(l)}>
+                {l.fileSummary} · {l.deviceLabel}
+                {l.isThisDevice ? " (이 기기)" : ""} · {formatKstDateTime(l.updatedAt)}
               </option>
             ))}
           </select>
@@ -88,7 +102,7 @@ export default function SessionInfoPanel({ userId, ready, part, selectedFiles, o
           {displayLog && onRestore && (
             <button
               onClick={() => {
-                onRestore(displayLog.fileKey.split("|"), displayLog.mode);
+                onRestore(displayLog.fileKey.split("|"), displayLog.mode, displayLog.deviceId);
                 setViewingKey("");
               }}
               className="btn-3d btn-blue mt-2 w-full py-1.5 text-xs"

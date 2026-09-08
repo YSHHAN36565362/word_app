@@ -32,8 +32,9 @@ import { DEFAULT_HINT_THEME } from "@/lib/hintTheme";
 import { fetchWords } from "@/lib/api";
 import { getDisplaySide, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
+import { getDeviceId, getDeviceLabel } from "@/lib/device";
 import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, resetWordMastery, saveWordMastery } from "@/lib/mastery";
-import { deleteLearningLog, fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
+import { deleteLearningLog, fileKeyOf, fileSummaryOf, formatKstDateTime, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, loadFavorites, removeFavorite } from "@/lib/favorites";
 import { FileRef, isItSelection, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
 
@@ -272,9 +273,14 @@ function PracticePageInner() {
     upsertLearningLog(userId, "practice", next.paths, fileSummaryOf(next.labels), next.total, next.done, next.m);
     // 이 조합의 이어하기 카드가 즉시 최신 상태로 보이도록 로컬 목록도 같이 갱신한다
     // (다음에 파일 선택 화면으로 돌아왔을 때 서버 재조회를 기다릴 필요가 없다).
+    // 다른 기기의 항목(같은 fileKey라도 deviceId가 다름)은 절대 안 건드린다.
+    const myDeviceId = getDeviceId();
     setSavedList((prev) => {
-      const others = prev.filter((e) => e.fileKey !== key);
-      return [{ fileKey: key, data, updatedAt: new Date().toISOString() }, ...others];
+      const others = prev.filter((e) => !(e.fileKey === key && e.deviceId === myDeviceId));
+      return [
+        { fileKey: key, deviceId: myDeviceId, deviceLabel: getDeviceLabel(), data, updatedAt: new Date().toISOString(), isThisDevice: true },
+        ...others,
+      ];
     });
   }
 
@@ -392,10 +398,15 @@ function PracticePageInner() {
   async function deleteSavedEntry(entry: SavedProgressEntry<PracticeProgress>) {
     if (!userId) return;
     const summary = fileSummaryOf(entry.data.filesLabel);
-    if (!window.confirm(`"${summary}" 이어서 연습하기 기록을 삭제할까요?\n진행률이 초기화됩니다.`)) return;
-    setDeletingSavedKey(entry.fileKey);
-    await Promise.all([deleteProgress(userId, "practice", entry.fileKey), deleteLearningLog(userId, "practice", entry.fileKey)]);
-    setSavedList((prev) => prev.filter((e) => e.fileKey !== entry.fileKey));
+    const deviceNote = entry.isThisDevice ? "" : ` (${entry.deviceLabel})`;
+    if (!window.confirm(`"${summary}"${deviceNote} 이어서 연습하기 기록을 삭제할까요?\n진행률이 초기화됩니다.`)) return;
+    const key = `${entry.fileKey}::${entry.deviceId}`;
+    setDeletingSavedKey(key);
+    await Promise.all([
+      deleteProgress(userId, "practice", entry.fileKey, entry.deviceId),
+      deleteLearningLog(userId, "practice", entry.fileKey, entry.deviceId),
+    ]);
+    setSavedList((prev) => prev.filter((e) => `${e.fileKey}::${e.deviceId}` !== key));
     setDeletingSavedKey("");
   }
 
@@ -948,27 +959,36 @@ function PracticePageInner() {
           <div className="text-xs font-bold" style={{ color: "var(--text-muted)" }}>
             이어서 연습하기 ({savedList.length}개)
           </div>
-          {savedList.map((entry) => (
-            <div key={entry.fileKey} className="study-card p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1 text-sm truncate" title={fileSummaryOf(entry.data.filesLabel)}>
-                  {fileSummaryOf(entry.data.filesLabel)} · 완료 {entry.data.doneCount} / {entry.data.totalCount}
+          {savedList.map((entry) => {
+            const key = `${entry.fileKey}::${entry.deviceId}`;
+            return (
+              <div key={key} className="study-card p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 overflow-x-auto">
+                    <div className="text-sm whitespace-nowrap">
+                      {fileSummaryOf(entry.data.filesLabel)} · 완료 {entry.data.doneCount} / {entry.data.totalCount}
+                    </div>
+                    <div className="mt-0.5 text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
+                      {entry.deviceLabel}
+                      {entry.isThisDevice && " (이 기기)"} · {formatKstDateTime(entry.updatedAt)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => deleteSavedEntry(entry)}
+                    disabled={deletingSavedKey === key}
+                    aria-label="이어서 연습하기 기록 삭제"
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold disabled:opacity-40"
+                    style={{ background: "var(--hint-bg)", color: "var(--red)" }}
+                  >
+                    {deletingSavedKey === key ? "..." : "삭제"}
+                  </button>
                 </div>
-                <button
-                  onClick={() => deleteSavedEntry(entry)}
-                  disabled={deletingSavedKey === entry.fileKey}
-                  aria-label="이어서 연습하기 기록 삭제"
-                  className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold disabled:opacity-40"
-                  style={{ background: "var(--hint-bg)", color: "var(--red)" }}
-                >
-                  {deletingSavedKey === entry.fileKey ? "..." : "삭제"}
+                <button onClick={() => resume(entry.data)} className="btn-3d btn-blue mt-3 w-full text-sm">
+                  이어서 연습하기
                 </button>
               </div>
-              <button onClick={() => resume(entry.data)} className="btn-3d btn-blue mt-3 w-full text-sm">
-                이어서 연습하기
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -979,6 +999,15 @@ function PracticePageInner() {
         >
           저장된 데이터가 없습니다.
         </div>
+      )}
+
+      {ready && userId && !savedListLoading && (
+        <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+          여기 안 보이는 예전 조합(이어서 할 큐가 남아있지 않은 기록)은 이 화면 맨 아래
+          &ldquo;선택된 파일&rdquo; 카드의 드롭다운에서 골라 [이 학습 다시 하기]로 그
+          파일 그대로 처음부터 다시 시작할 수 있어요(단, 중간까지 채점했던 지점은
+          되살릴 수 없습니다).
+        </p>
       )}
 
       {fromWrongNotes && userId && (
@@ -1090,7 +1119,11 @@ function PracticePageInner() {
         onRestore={(paths, mode) => {
           // "이 학습 다시 하기"가 이어서 할 수 있는 저장된 진행 중 하나와 정확히 같은
           // 파일 조합을 가리키면, 처음부터 다시 섞어 시작하는 대신 그 진행을 그대로
-          // 이어간다 — 안 그러면 방금까지 쌓은 완료 개수가 0으로 리셋된 것처럼 보인다.
+          // 이어간다 — 기기 구분 없이 가장 최근 기록을 쓴다(savedList는 기기 관계없이
+          // updated_at 최신순으로 정렬돼 있으므로 .find()가 자연히 가장 최근 것을
+          // 고른다). 번호만 같으면 기기가 달라도 정확한 진행 지점을 이어받아야 한다는
+          // 요청에 따른 것 — 학습 기록(요약)만 남고 실제 큐는 이미 없어졌으면(예: 오래전에
+          // abandoned) 처음부터 새로 시작한다.
           const existing = savedList.find((e) => e.fileKey === fileKeyOf(paths));
           if (existing) {
             resume(existing.data);

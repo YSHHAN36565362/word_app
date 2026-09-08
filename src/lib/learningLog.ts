@@ -1,6 +1,7 @@
 "use client";
 
 import { getSupabaseAsync } from "./supabase";
+import { getDeviceId, getDeviceLabel } from "./device";
 
 export type Part = "study" | "practice" | "exam" | "script";
 
@@ -11,6 +12,11 @@ export interface LearningLogEntry {
   doneCount: number;
   updatedAt: string; // ISO
   mode: string | null; // 연습 모드(word_only/meaning_only/random) 등, 없으면 null
+  // 같은 번호를 여러 기기에서 쓸 때 이 기록을 남긴 기기(device.ts 참고). 예전(기기
+  // 구분 이전) 기록은 빈 문자열.
+  deviceId: string;
+  deviceLabel: string;
+  isThisDevice: boolean;
 }
 
 export interface LearningLogEntryWithPart extends LearningLogEntry {
@@ -91,14 +97,16 @@ function readAllLsRecords(userId: string, part?: Part): LsRecord[] {
   return out;
 }
 
-/** 같은 fileKey가 양쪽에 있으면 updated_at이 더 최신인 쪽을 남긴다. */
+/** 같은 (fileKey, deviceId) 조합이 양쪽에 있으면 updated_at이 더 최신인 쪽을
+ * 남긴다 — 다른 기기의 기록은 절대 하나로 합치지 않고 전부 별도 항목으로 둔다. */
 function mergeByFileKey(remote: LearningLogEntry[], local: LearningLogEntry[]): LearningLogEntry[] {
   const map = new Map<string, LearningLogEntry>();
-  for (const r of remote) map.set(r.fileKey, r);
+  for (const r of remote) map.set(`${r.fileKey}::${r.deviceId}`, r);
   for (const l of local) {
-    const existing = map.get(l.fileKey);
+    const key = `${l.fileKey}::${l.deviceId}`;
+    const existing = map.get(key);
     if (!existing || new Date(l.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
-      map.set(l.fileKey, l);
+      map.set(key, l);
     }
   }
   return Array.from(map.values()).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
@@ -106,9 +114,9 @@ function mergeByFileKey(remote: LearningLogEntry[], local: LearningLogEntry[]): 
 
 function mergeByPartAndFileKey(remote: LearningLogEntryWithPart[], local: LsRecord[]): LearningLogEntryWithPart[] {
   const map = new Map<string, LearningLogEntryWithPart>();
-  for (const r of remote) map.set(`${r.part}::${r.fileKey}`, r);
+  for (const r of remote) map.set(`${r.part}::${r.fileKey}::${r.deviceId}`, r);
   for (const l of local) {
-    const key = `${l.part}::${l.fileKey}`;
+    const key = `${l.part}::${l.fileKey}::${l.deviceId}`;
     const existing = map.get(key);
     if (!existing || new Date(l.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
       map.set(key, l);
@@ -125,7 +133,7 @@ function backgroundSyncLocalToRemote(
   remoteByKey: Map<string, LearningLogEntry>
 ): void {
   for (const l of local) {
-    const key = `${l.part}::${l.fileKey}`;
+    const key = `${l.part}::${l.fileKey}::${l.deviceId}`;
     const r = remoteByKey.get(key);
     if (r && new Date(r.updatedAt).getTime() >= new Date(l.updatedAt).getTime()) continue;
     supabase
@@ -135,13 +143,15 @@ function backgroundSyncLocalToRemote(
           user_id: userId,
           part: l.part,
           file_key: l.fileKey,
+          device_id: l.deviceId,
+          device_label: l.deviceLabel,
           file_summary: l.fileSummary,
           total_count: l.totalCount,
           done_count: l.doneCount,
           mode: l.mode,
           updated_at: l.updatedAt,
         },
-        { onConflict: "user_id,part,file_key" }
+        { onConflict: "user_id,part,file_key,device_id" }
       )
       .then(({ error }) => {
         if (error) console.error("[learningLog] background sync failed", error);
@@ -167,6 +177,8 @@ export async function upsertLearningLog(
 ): Promise<void> {
   if (!userId || paths.length === 0) return;
   const fileKey = fileKeyOf(paths);
+  const deviceId = getDeviceId();
+  const deviceLabel = getDeviceLabel();
   const entry: LearningLogEntry = {
     fileKey,
     fileSummary,
@@ -174,6 +186,9 @@ export async function upsertLearningLog(
     doneCount,
     updatedAt: new Date().toISOString(),
     mode,
+    deviceId,
+    deviceLabel,
+    isThisDevice: true,
   };
   // Supabase 요청 완료를 기다리지 않고 이 기기에는 즉시 남겨둔다 — 네트워크가 느리거나
   // 실패해도 이 기기 안에서는 방금 쌓은 완료 기록이 사라지지 않는다.
@@ -192,13 +207,15 @@ export async function upsertLearningLog(
           user_id: userId,
           part,
           file_key: fileKey,
+          device_id: deviceId,
+          device_label: deviceLabel,
           file_summary: entry.fileSummary,
           total_count: entry.totalCount,
           done_count: entry.doneCount,
           mode: entry.mode,
           updated_at: entry.updatedAt,
         },
-        { onConflict: "user_id,part,file_key" }
+        { onConflict: "user_id,part,file_key,device_id" }
       );
       if (error) console.error("[learningLog] upsert failed, kept in localStorage as fallback", error);
     });
@@ -207,14 +224,19 @@ export async function upsertLearningLog(
   return run;
 }
 
-function mapRow(r: {
-  file_key: string;
-  file_summary: string;
-  total_count: number;
-  done_count: number;
-  updated_at: string;
-  mode: string | null;
-}): LearningLogEntry {
+function mapRow(
+  r: {
+    file_key: string;
+    file_summary: string;
+    total_count: number;
+    done_count: number;
+    updated_at: string;
+    mode: string | null;
+    device_id: string | null;
+    device_label: string | null;
+  },
+  myDeviceId: string
+): LearningLogEntry {
   return {
     fileKey: r.file_key,
     fileSummary: r.file_summary,
@@ -222,66 +244,80 @@ function mapRow(r: {
     doneCount: r.done_count,
     updatedAt: r.updated_at,
     mode: r.mode ?? null,
+    deviceId: r.device_id ?? "",
+    deviceLabel: r.device_label || "예전 기록(기기 정보 없음)",
+    isThisDevice: r.device_id === myDeviceId,
   };
 }
 
 /**
- * 이 사용자가 이 파트에서 공부한 모든 파일 조합을 최근 순으로 돌려준다 (드롭다운용).
- * 캐시하지 않고 항상 Supabase에서 바로 조회한다 — 대시보드가 방금 저장된 진행률을
- * 놓치지 않고 보여줘야 하기 때문이다. Supabase 결과와 이 기기의 로컬 보조 기록을
- * 파일 조합(fileKey)별로 병합해서, 서버에 아직 반영 안 된 최신 완료 기록도 빠지지
- * 않고 보이게 한다.
+ * 이 사용자가 이 파트에서 공부한 모든 파일 조합을 기기별로 최근 순으로 돌려준다
+ * (드롭다운용). 캐시하지 않고 항상 Supabase에서 바로 조회한다 — 대시보드가 방금
+ * 저장된 진행률을 놓치지 않고 보여줘야 하기 때문이다. Supabase 결과와 이 기기의
+ * 로컬 보조 기록을 (파일 조합, 기기)별로 병합해서, 서버에 아직 반영 안 된 최신
+ * 완료 기록도 빠지지 않고 보이게 한다 — 다른 기기의 기록은 하나로 합치지 않는다.
  */
 export async function listLearningLogs(userId: string, part: Part): Promise<LearningLogEntry[]> {
   if (!userId) return [];
+  const myDeviceId = getDeviceId();
   const local = readAllLsRecords(userId, part);
   const supabase = await getSupabaseAsync();
-  if (!supabase) return mergeByFileKey([], local).slice(0, 30);
+  if (!supabase) return mergeByFileKey([], local).slice(0, 60);
 
   const { data, error } = await supabase
     .from("learning_log")
-    .select("file_key, file_summary, total_count, done_count, updated_at, mode")
+    .select("file_key, file_summary, total_count, done_count, updated_at, mode, device_id, device_label")
     .eq("user_id", userId)
     .eq("part", part)
     .order("updated_at", { ascending: false })
-    .limit(30);
-  const remote = !error && data ? (data as Parameters<typeof mapRow>[0][]).map(mapRow) : [];
+    .limit(60);
+  const remote = !error && data ? (data as Parameters<typeof mapRow>[0][]).map((r) => mapRow(r, myDeviceId)) : [];
 
-  const remoteByKey = new Map(remote.map((r) => [`${part}::${r.fileKey}`, r]));
+  const remoteByKey = new Map(remote.map((r) => [`${part}::${r.fileKey}::${r.deviceId}`, r]));
   backgroundSyncLocalToRemote(userId, supabase, local, remoteByKey);
 
-  return mergeByFileKey(remote, local).slice(0, 30);
+  return mergeByFileKey(remote, local).slice(0, 60);
 }
 
-/** 이 사용자의 모든 파트를 통틀어 저장된 학습 기록 전부를 최근 순으로 돌려준다 (설정 페이지 관리용). */
+/** 이 사용자의 모든 파트를 통틀어 저장된 학습 기록 전부를 기기별로 최근 순으로 돌려준다 (설정 페이지 관리용). */
 export async function listAllLearningLogs(userId: string): Promise<LearningLogEntryWithPart[]> {
   if (!userId) return [];
+  const myDeviceId = getDeviceId();
   const local = readAllLsRecords(userId);
   const supabase = await getSupabaseAsync();
-  if (!supabase) return mergeByPartAndFileKey([], local).slice(0, 100);
+  if (!supabase) return mergeByPartAndFileKey([], local).slice(0, 200);
 
   const { data, error } = await supabase
     .from("learning_log")
-    .select("part, file_key, file_summary, total_count, done_count, updated_at, mode")
+    .select("part, file_key, file_summary, total_count, done_count, updated_at, mode, device_id, device_label")
     .eq("user_id", userId)
     .order("updated_at", { ascending: false })
-    .limit(100);
+    .limit(200);
   const remote: LearningLogEntryWithPart[] =
-    !error && data ? (data as (Parameters<typeof mapRow>[0] & { part: Part })[]).map((r) => ({ ...mapRow(r), part: r.part })) : [];
+    !error && data ? (data as (Parameters<typeof mapRow>[0] & { part: Part })[]).map((r) => ({ ...mapRow(r, myDeviceId), part: r.part })) : [];
 
-  const remoteByKey = new Map(remote.map((r) => [`${r.part}::${r.fileKey}`, r]));
+  const remoteByKey = new Map(remote.map((r) => [`${r.part}::${r.fileKey}::${r.deviceId}`, r]));
   backgroundSyncLocalToRemote(userId, supabase, local, remoteByKey);
 
-  return mergeByPartAndFileKey(remote, local).slice(0, 100);
+  return mergeByPartAndFileKey(remote, local).slice(0, 200);
 }
 
-/** 학습 기록 하나를 삭제한다(리셋). 진행률/최근 학습 시간이 그 파일 조합에서 사라진다. */
-export async function deleteLearningLog(userId: string, part: Part, fileKey: string): Promise<void> {
+/** 학습 기록 하나를 삭제한다(리셋). deviceId를 생략하면 "이 기기"의 기록만 지운다.
+ * 다른 기기의 기록을 지우려면(사용자가 목록에서 직접 골라 "삭제"를 누른 경우)
+ * deviceId를 넘긴다. */
+export async function deleteLearningLog(userId: string, part: Part, fileKey: string, deviceId?: string): Promise<void> {
   if (!userId) return;
-  removeLsRecord(userId, part, fileKey);
+  const targetDeviceId = deviceId ?? getDeviceId();
+  if (targetDeviceId === getDeviceId()) removeLsRecord(userId, part, fileKey);
   const supabase = await getSupabaseAsync();
   if (!supabase) return;
-  const { error } = await supabase.from("learning_log").delete().eq("user_id", userId).eq("part", part).eq("file_key", fileKey);
+  const { error } = await supabase
+    .from("learning_log")
+    .delete()
+    .eq("user_id", userId)
+    .eq("part", part)
+    .eq("file_key", fileKey)
+    .eq("device_id", targetDeviceId);
   if (error) console.error("[learningLog] delete failed", error);
 }
 

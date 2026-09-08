@@ -10,6 +10,7 @@ import { useFontScale } from "@/hooks/useFontScale";
 import { DEFAULT_HINT_THEME, HINT_SCALE_MAX, HINT_SCALE_MIN, HINT_SCALE_STEP, HINT_SECTIONS } from "@/lib/hintTheme";
 import { deleteProgress, isSyncEnabled } from "@/lib/progress";
 import { deleteLearningLog, formatKstDateTime, listAllLearningLogs, LearningLogEntryWithPart, Part } from "@/lib/learningLog";
+import { getDeviceLabel, setDeviceLabel } from "@/lib/device";
 import PageHeader from "@/components/PageHeader";
 
 const PART_LABEL: Record<Part, string> = {
@@ -53,6 +54,11 @@ export default function SettingsPage() {
   const [input, setInput] = useState("");
   const [touched, setTouched] = useState(false);
   const [syncEnabled, setSyncEnabled] = useState(false);
+  // 여러 기기에서 같은 번호를 쓸 때 기록에 "어느 기기"인지 보여주기 위한 이름
+  // (device.ts). 처음엔 기기 종류를 추측한 값이 뜨고, 여기서 원하는 이름으로
+  // 바꿔둘 수 있다(예: "내 맥북", "거실 아이패드").
+  const [deviceLabelInput, setDeviceLabelInput] = useState("");
+  const [deviceLabelSaved, setDeviceLabelSaved] = useState(true);
   const [logs, setLogs] = useState<LearningLogEntryWithPart[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   // listAllLearningLogs()가 실패(reject)하면 예전에는 .then()이 아예 안 불려서
@@ -67,7 +73,15 @@ export default function SettingsPage() {
     // Supabase 클라이언트는 브라우저에서만 만들어져야 하므로(서버/빌드 시 prerender에서
     // 만들면 잘못된 URL 등으로 빌드가 깨질 수 있음) 마운트 후에만 확인한다.
     isSyncEnabled().then(setSyncEnabled);
+    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+    setDeviceLabelInput(getDeviceLabel());
   }, []);
+
+  function saveDeviceLabel() {
+    setDeviceLabel(deviceLabelInput);
+    setDeviceLabelInput(getDeviceLabel());
+    setDeviceLabelSaved(true);
+  }
 
   function loadLogs() {
     if (!userId) return;
@@ -93,11 +107,12 @@ export default function SettingsPage() {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   async function handleDeleteLog(entry: LearningLogEntryWithPart) {
-    const key = `${entry.part}::${entry.fileKey}`;
+    const key = `${entry.part}::${entry.fileKey}::${entry.deviceId}`;
     const extraNote = entry.part === "practice" ? " 이어서 연습하기 카드에서도 사라집니다." : "";
-    if (!window.confirm(`"${entry.fileSummary}" (${PART_LABEL[entry.part]}) 학습 기록을 삭제할까요?\n진행률과 최근 학습 시간이 초기화됩니다.${extraNote}`)) return;
+    const deviceNote = entry.isThisDevice ? "" : ` (${entry.deviceLabel})`;
+    if (!window.confirm(`"${entry.fileSummary}"${deviceNote} (${PART_LABEL[entry.part]}) 학습 기록을 삭제할까요?\n진행률과 최근 학습 시간이 초기화됩니다.${extraNote}`)) return;
     setDeletingKey(key);
-    await deleteLearningLog(userId, entry.part, entry.fileKey);
+    await deleteLearningLog(userId, entry.part, entry.fileKey, entry.deviceId);
     // learning_log(요약 기록)만 지우고 progress(실제 이어하기 큐)는 그대로 둬서,
     // 여기서 삭제해도 연습 화면의 "이어서 연습하기" 카드에는 그 조합이 계속 남아있는
     // 문제가 있었다. 연습 파트는 파일 조합별로 독립된 슬롯(file_key=파일 조합)을
@@ -105,9 +120,9 @@ export default function SettingsPage() {
     // (file_key="") 여기서 넘어온 파일 조합과 실제로 같은 진행인지 구분할 수 없어,
     // 잘못 지우는 걸 피하려고 지금은 연습 파트만 같이 지운다.
     if (entry.part === "practice") {
-      await deleteProgress(userId, "practice", entry.fileKey);
+      await deleteProgress(userId, "practice", entry.fileKey, entry.deviceId);
     }
-    setLogs((prev) => prev.filter((l) => !(l.part === entry.part && l.fileKey === entry.fileKey)));
+    setLogs((prev) => prev.filter((l) => `${l.part}::${l.fileKey}::${l.deviceId}` !== key));
     setDeletingKey("");
   }
 
@@ -299,6 +314,31 @@ export default function SettingsPage() {
 
       {ready && userId && (
         <div className="mt-4 study-card p-4">
+          <div className="text-sm font-bold">이 기기 이름</div>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+            같은 번호를 여러 기기(맥북·데스크탑·아이폰·아이패드 등)에서 쓸 때, 아래
+            학습 기록에 어느 기기의 기록인지 이 이름으로 표시됩니다. 기기 종류를
+            추측해 미리 채워뒀으니 원하는 이름으로 바꿔두면 더 알아보기 쉬워요.
+            (이 기기에만 저장됩니다)
+          </p>
+          <input
+            value={deviceLabelInput}
+            onChange={(e) => {
+              setDeviceLabelInput(e.target.value);
+              setDeviceLabelSaved(false);
+            }}
+            placeholder="예: 내 맥북"
+            className="mt-3 w-full rounded-xl px-3 py-2.5 text-sm"
+            style={{ background: "var(--hint-bg)", color: "var(--text)", border: "1px solid var(--card-border)" }}
+          />
+          <button onClick={saveDeviceLabel} disabled={deviceLabelSaved || !deviceLabelInput.trim()} className="btn-3d btn-accent mt-3 w-full disabled:opacity-40">
+            저장
+          </button>
+        </div>
+      )}
+
+      {ready && userId && (
+        <div className="mt-4 study-card p-4">
           <div className="text-sm font-bold">학습 기록 관리</div>
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
             파일을 잘못 체크했거나 특정 조합의 진도를 리셋하고 싶을 때 개별로 삭제할 수 있습니다.
@@ -328,7 +368,7 @@ export default function SettingsPage() {
           {!logsLoading && !logsError && logs.length > 0 && (
             <div className="mt-3 flex flex-col gap-2">
               {logs.map((entry) => {
-                const key = `${entry.part}::${entry.fileKey}`;
+                const key = `${entry.part}::${entry.fileKey}::${entry.deviceId}`;
                 return (
                   <div
                     key={key}
@@ -343,12 +383,14 @@ export default function SettingsPage() {
                         >
                           {PART_LABEL[entry.part]}
                         </span>
-                        <span className="truncate font-bold" title={entry.fileSummary}>
-                          {entry.fileSummary}
-                        </span>
+                        {/* 파일 이름이 길면 잘려서 안 보이던 것을, 가로 스크롤로 전부 볼 수 있게 했다. */}
+                        <div className="min-w-0 flex-1 overflow-x-auto">
+                          <span className="whitespace-nowrap font-bold">{entry.fileSummary}</span>
+                        </div>
                       </div>
                       <div className="mt-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                        {formatKstDateTime(entry.updatedAt)} · {entry.doneCount} / {entry.totalCount}개
+                        {entry.deviceLabel}
+                        {entry.isThisDevice && " (이 기기)"} · {formatKstDateTime(entry.updatedAt)} · {entry.doneCount} / {entry.totalCount}개
                       </div>
                     </div>
                     <button

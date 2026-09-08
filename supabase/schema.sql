@@ -95,6 +95,23 @@ alter table learning_log add column if not exists mode text;
 
 create index if not exists learning_log_user_part_idx on learning_log (user_id, part, updated_at desc);
 
+-- 같은 번호를 여러 기기(맥북/데스크탑/아이폰/아이패드 등)에서 쓸 때, 예전에는
+-- progress/learning_log가 (user_id, part, file_key)당 행을 하나만 가져서 나중에
+-- 저장한 기기가 이전 기기의 진행을 조용히 덮어썼다("전에는 잘 됐는데 어느 순간부터
+-- 동기화가 안 된다"는 제보의 원인). device_id를 기본키에 추가해 기기마다 별도 행을
+-- 남기고, 어느 기기의 기록인지 device_label로 보여줘서 사용자가 직접 보고 고를 수
+-- 있게 한다. 기존 행은 device_id=''(빈 문자열, "예전 기록/알 수 없는 기기")로 남아
+-- 그대로 보존된다 — 데이터 유실 없음.
+alter table progress add column if not exists device_id text not null default '';
+alter table progress add column if not exists device_label text;
+alter table progress drop constraint if exists progress_pkey;
+alter table progress add primary key (user_id, part, file_key, device_id);
+
+alter table learning_log add column if not exists device_id text not null default '';
+alter table learning_log add column if not exists device_label text;
+alter table learning_log drop constraint if exists learning_log_pkey;
+alter table learning_log add primary key (user_id, part, file_key, device_id);
+
 -- 하루에 한 번이라도 학습(학습/연습/시험/지문 중 아무거나)했으면 그 날짜로 한 행만
 -- 남긴다. "연속 학습일(스트릭)" 계산에 쓰인다 — Duolingo류 앱의 스트릭과 같은 개념.
 create table if not exists daily_activity (

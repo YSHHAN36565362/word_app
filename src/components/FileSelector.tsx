@@ -369,7 +369,8 @@ export default function FileSelector({ onSelectionChange, restorePaths }: Props)
                     onChange={() => toggleFile(f.path)}
                     className="h-4 w-4 accent-[var(--accent)]"
                   />
-                  <span className="truncate">{f.filename}</span>
+                  {/* 파일 이름이 길면 잘려서 안 보이던 것을, 가로 스크롤로 전부 볼 수 있게 했다. */}
+                  <span className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap">{f.filename}</span>
                 </label>
               ))}
             </div>
