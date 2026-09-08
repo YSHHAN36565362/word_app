@@ -266,10 +266,7 @@ export default function StudyPage() {
                 <div className="text-center font-extrabold" style={{ color: "var(--blue)", fontSize: "calc(1.5rem * var(--study-font-scale, 1))" }}>
                   {current.word}
                 </div>
-                <span className="flex items-center">
-                  <SpeakButton text={current.word} compact />
-                  <KeyBadge>S</KeyBadge>
-                </span>
+                <SpeakButton text={current.word} compact />
                 <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
                   {favorites.has(wordKey(current)) ? "★" : "☆"}
                 </button>

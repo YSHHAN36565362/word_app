@@ -37,11 +37,12 @@ export default function SpeakButton({ text, lang = "ja-JP", compact = false }: P
     return (
       <button
         onClick={() => speak(text, lang)}
-        aria-label="발음 듣기"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-        style={{ color: "var(--text-muted)" }}
+        aria-label="발음 듣기 (단축키 S)"
+        className="flex h-9 shrink-0 items-center gap-1 rounded-full px-2.5"
+        style={{ background: "var(--blue)", color: "#fff" }}
       >
-        <SpeakerIcon size={22} />
+        <SpeakerIcon size={20} />
+        <span className="text-[11px] font-bold leading-none">S</span>
       </button>
     );
   }

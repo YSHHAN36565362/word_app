@@ -818,10 +818,7 @@ function PracticePageInner() {
               <div className="mr-1">
                 <FontSizeControl fontScale={fontScale} onAdjust={adjustFontScale} onReset={() => setFontScale(1)} />
               </div>
-              <span className="flex items-center">
-                <SpeakButton text={current.word} compact />
-                <KeyBadge>S</KeyBadge>
-              </span>
+              <SpeakButton text={current.word} compact />
               <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
                 {favorites.has(wordKey(current)) ? "★" : "☆"}
               </button>
