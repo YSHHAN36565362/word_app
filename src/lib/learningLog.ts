@@ -28,6 +28,14 @@ export function fileKeyOf(paths: string[]): string {
   return [...paths].sort().join("|");
 }
 
+/** 이 조합의 파일 중 하나라도 지금 목록에 없으면(그 뒤 삭제·이름 변경됨) 다시
+ * 시작할 수 없다 — "학습 기록 관리"/연습 화면에서 그런 기록을 알아보고 지우기
+ * 쉽게 표시하는 데 쓴다. */
+export function isFileKeyMissing(fileKey: string, existingPaths: Set<string>): boolean {
+  if (!fileKey) return false;
+  return fileKey.split("|").some((p) => !existingPaths.has(p));
+}
+
 /** "파일명 외 N개 선택됨" 형태의 요약 라벨을 만든다. */
 export function fileSummaryOf(labels: string[]): string {
   if (labels.length === 0) return "";
@@ -333,7 +341,10 @@ export async function listAllLearningLogs(userId: string): Promise<LearningLogEn
 export async function deleteLearningLog(userId: string, part: Part, fileKey: string, deviceId?: string): Promise<void> {
   if (!userId) return;
   const targetDeviceId = deviceId ?? getDeviceId();
-  if (targetDeviceId === getDeviceId()) removeLsRecord(userId, part, fileKey);
+  // device_id=''(레거시) 로컬 사본은 이 기기가 device_id를 갖기 전에 이 기기 자신이
+  // 남긴 것일 수밖에 없다(localStorage는 기기 간에 공유되지 않으므로) — 그러니 이
+  // 기기 기록과 마찬가지로 로컬에서도 지운다.
+  if (targetDeviceId === getDeviceId() || targetDeviceId === "") removeLsRecord(userId, part, fileKey);
   const supabase = await getSupabaseAsync();
   if (!supabase) return;
   const { error } = await supabase

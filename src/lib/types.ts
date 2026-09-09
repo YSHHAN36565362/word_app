@@ -32,6 +32,19 @@ export interface WordTree {
   error?: string;
 }
 
+/** 지금 목록에 실제로 존재하는 파일 경로 전체를 모은다 — 예전 학습 기록이 가리키는
+ * 파일이 그 뒤 삭제·이동돼서 더 이상 다시 시작할 수 없는지 확인하는 데 쓴다. */
+export function flattenWordTreePaths(tree: WordTree): Set<string> {
+  const set = new Set<string>();
+  for (const cat of tree.categories) {
+    for (const f of cat.files) set.add(f.path);
+    for (const sub of cat.subfolders) {
+      for (const f of sub.files) set.add(f.path);
+    }
+  }
+  return set;
+}
+
 export type StudyMode = "word_only" | "meaning_only" | "random";
 
 export type ScoreLevel = 100 | 60 | 40 | 0;

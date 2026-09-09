@@ -34,9 +34,9 @@ import { getDisplaySide, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffl
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { getDeviceId, getDeviceLabel } from "@/lib/device";
 import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, resetWordMastery, saveWordMastery } from "@/lib/mastery";
-import { deleteLearningLog, fileKeyOf, fileSummaryOf, formatKstDateTime, upsertLearningLog } from "@/lib/learningLog";
+import { deleteLearningLog, fileKeyOf, fileSummaryOf, formatKstDateTime, isFileKeyMissing, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, loadFavorites, removeFavorite } from "@/lib/favorites";
-import { FileRef, isItSelection, PracticeProgress, StudyMode, WordEntry } from "@/lib/types";
+import { FileRef, flattenWordTreePaths, isItSelection, PracticeProgress, StudyMode, WordEntry, WordTree } from "@/lib/types";
 
 const WRONG_NOTES_PATH_KEY = "__wrong_notes__";
 const FAVORITES_PATH_KEY = "__favorites__";
@@ -134,6 +134,9 @@ function PracticePageInner() {
   // "이어서 연습하기" 카드를 직접 삭제하는 중인 fileKey — 설정의 "학습 기록 관리"까지
   // 안 가도 여기서 바로 0개짜리 등 필요 없는 진행을 지울 수 있게 했다.
   const [deletingSavedKey, setDeletingSavedKey] = useState<string>("");
+  // 예전 진행이 가리키는 파일이 그 뒤 삭제·이름 변경됐으면 다시 시작할 수 없다 —
+  // 지금 실제로 존재하는 파일 경로 목록과 비교해서 그런 카드를 알아보기 쉽게 표시한다.
+  const [existingPaths, setExistingPaths] = useState<Set<string> | null>(null);
 
   const [queue, setQueue] = useState<WordEntry[]>([]);
   const [current, setCurrent] = useState<WordEntry | null>(null);
@@ -192,6 +195,15 @@ function PracticePageInner() {
     setHideMascotState(next);
     window.localStorage.setItem("word_app_practice_hide_mascot", next ? "1" : "0");
   }
+
+  useEffect(() => {
+    fetch("/api/wordlist/tree")
+      .then((res) => res.json())
+      .then((tree: WordTree) => setExistingPaths(flattenWordTreePaths(tree)))
+      .catch(() => {
+        /* 실패해도 "학습 불가" 표시만 안 뜰 뿐, 나머지 화면엔 영향 없다. */
+      });
+  }, []);
 
   // 데스크탑/노트북에서는 브라우저 확대 없이는 한자·설명 글씨가 작게 느껴진다는
   // 피드백이 있어서 카드 글자 크기를 사용자가 직접 조절할 수 있게 한다(학습/시험/
@@ -747,7 +759,7 @@ function PracticePageInner() {
                     className="rounded-2xl py-3 text-center text-xs font-bold"
                     style={{ color: "var(--text-muted)", background: "var(--hint-bg)" }}
                   >
-                    채점 버튼이 숨겨져 있어요 — 키보드 1~4 또는 방향키로 채점하세요 (⚙ 설정에서 다시 켜기)
+                    완벽함 위쪽 · 조금 앎 왼쪽 · 헷갈림 오른쪽 · 모름 아래쪽 (⚙ 설정에서 다시 켜기)
                   </div>
                 ) : (
                   <div className="grid grid-cols-2" style={{ gap: `${0.75 * scoreBtnScale}rem` }}>
@@ -958,6 +970,7 @@ function PracticePageInner() {
           </div>
           {savedList.map((entry) => {
             const key = `${entry.fileKey}::${entry.deviceId}`;
+            const unusable = existingPaths ? isFileKeyMissing(entry.fileKey, existingPaths) : false;
             return (
               <div key={key} className="study-card p-4">
                 <div className="flex items-start justify-between gap-2">
@@ -969,6 +982,11 @@ function PracticePageInner() {
                       {entry.deviceLabel}
                       {entry.isThisDevice && " (이 기기)"} · {formatKstDateTime(entry.updatedAt)}
                     </div>
+                    {unusable && (
+                      <div className="mt-0.5 text-[10px] font-bold whitespace-nowrap" style={{ color: "var(--red)" }}>
+                        학습 불가 — 원본 파일이 삭제되었거나 이름이 바뀌었어요
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={() => deleteSavedEntry(entry)}
@@ -980,9 +998,11 @@ function PracticePageInner() {
                     {deletingSavedKey === key ? "..." : "삭제"}
                   </button>
                 </div>
-                <button onClick={() => resume(entry.data)} className="btn-3d btn-blue mt-3 w-full text-sm">
-                  이어서 연습하기
-                </button>
+                {!unusable && (
+                  <button onClick={() => resume(entry.data)} className="btn-3d btn-blue mt-3 w-full text-sm">
+                    이어서 연습하기
+                  </button>
+                )}
               </div>
             );
           })}
@@ -1113,6 +1133,13 @@ function PracticePageInner() {
         ready={ready}
         part="practice"
         selectedFiles={selectedFiles}
+        existingPaths={existingPaths}
+        onDeleteLog={(fileKey, deviceId) => {
+          if (!userId) return;
+          deleteProgress(userId, "practice", fileKey, deviceId);
+          deleteLearningLog(userId, "practice", fileKey, deviceId);
+          setSavedList((prev) => prev.filter((e) => !(e.fileKey === fileKey && e.deviceId === deviceId)));
+        }}
         onRestore={(paths, mode) => {
           // "이 학습 다시 하기"가 이어서 할 수 있는 저장된 진행 중 하나와 정확히 같은
           // 파일 조합을 가리키면, 처음부터 다시 섞어 시작하는 대신 그 진행을 그대로

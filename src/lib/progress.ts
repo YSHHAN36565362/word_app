@@ -186,7 +186,10 @@ export async function loadProgress<T>(userId: string, part: string, fileKey = ""
 export async function deleteProgress(userId: string, part: string, fileKey = "", deviceId?: string): Promise<void> {
   if (!userId) return;
   const targetDeviceId = deviceId ?? getDeviceId();
-  if (targetDeviceId === getDeviceId()) removeLsProgress(userId, part, fileKey);
+  // device_id=''(레거시) 로컬 사본은 이 기기가 device_id를 갖기 전에 이 기기 자신이
+  // 남긴 것일 수밖에 없다(localStorage는 기기 간에 공유되지 않으므로) — 그러니 이
+  // 기기 기록과 마찬가지로 로컬에서도 지운다.
+  if (targetDeviceId === getDeviceId() || targetDeviceId === "") removeLsProgress(userId, part, fileKey);
   const key = progressChainKey(userId, part, fileKey);
   const prior = progressChains.get(key) ?? Promise.resolve();
   const run = prior

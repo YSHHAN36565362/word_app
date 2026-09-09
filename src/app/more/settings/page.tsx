@@ -9,8 +9,9 @@ import { useHintTheme } from "@/hooks/useHintTheme";
 import { useFontScale } from "@/hooks/useFontScale";
 import { DEFAULT_HINT_THEME, HINT_SCALE_MAX, HINT_SCALE_MIN, HINT_SCALE_STEP, HINT_SECTIONS } from "@/lib/hintTheme";
 import { deleteProgress, isSyncEnabled } from "@/lib/progress";
-import { deleteLearningLog, formatKstDateTime, listAllLearningLogs, LearningLogEntryWithPart, Part } from "@/lib/learningLog";
+import { deleteLearningLog, formatKstDateTime, isFileKeyMissing, listAllLearningLogs, LearningLogEntryWithPart, Part } from "@/lib/learningLog";
 import { getDeviceLabel, setDeviceLabel } from "@/lib/device";
+import { flattenWordTreePaths, WordTree } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 
 const PART_LABEL: Record<Part, string> = {
@@ -66,6 +67,9 @@ export default function SettingsPage() {
   // 로딩을 끝내고 이 상태로 안내 문구 + "다시 시도" 버튼을 보여준다.
   const [logsError, setLogsError] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string>("");
+  // 예전 학습 기록이 가리키는 파일이 그 뒤 삭제·이름 변경됐으면 다시 시작할 수
+  // 없다 — 지금 실제로 존재하는 파일 경로 목록을 받아와서 기록마다 비교한다.
+  const [existingPaths, setExistingPaths] = useState<Set<string> | null>(null);
 
   const displayValue = touched ? input : userId;
 
@@ -75,6 +79,12 @@ export default function SettingsPage() {
     isSyncEnabled().then(setSyncEnabled);
     /* eslint-disable-next-line react-hooks/set-state-in-effect */
     setDeviceLabelInput(getDeviceLabel());
+    fetch("/api/wordlist/tree")
+      .then((res) => res.json())
+      .then((tree: WordTree) => setExistingPaths(flattenWordTreePaths(tree)))
+      .catch(() => {
+        /* 실패해도 "학습 불가" 표시만 안 뜰 뿐, 나머지 화면엔 영향 없다. */
+      });
   }, []);
 
   function saveDeviceLabel() {
@@ -369,6 +379,7 @@ export default function SettingsPage() {
             <div className="mt-3 flex flex-col gap-2">
               {logs.map((entry) => {
                 const key = `${entry.part}::${entry.fileKey}::${entry.deviceId}`;
+                const unusable = existingPaths ? isFileKeyMissing(entry.fileKey, existingPaths) : false;
                 return (
                   <div
                     key={key}
@@ -392,6 +403,11 @@ export default function SettingsPage() {
                         {entry.deviceLabel}
                         {entry.isThisDevice && " (이 기기)"} · {formatKstDateTime(entry.updatedAt)} · {entry.doneCount} / {entry.totalCount}개
                       </div>
+                      {unusable && (
+                        <div className="mt-0.5 text-[10px] font-bold" style={{ color: "var(--red)" }}>
+                          학습 불가 — 원본 파일이 삭제되었거나 이름이 바뀌었어요
+                        </div>
+                      )}
                     </div>
                     <button
                       onClick={() => handleDeleteLog(entry)}

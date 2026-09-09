@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fileKeyOf, fileSummaryOf, formatKstDateTime, listLearningLogs, Part, LearningLogEntry } from "@/lib/learningLog";
+import { fileKeyOf, fileSummaryOf, formatKstDateTime, isFileKeyMissing, listLearningLogs, Part, LearningLogEntry } from "@/lib/learningLog";
 import { FileRef } from "@/lib/types";
 
 interface Props {
@@ -10,6 +10,11 @@ interface Props {
   part: Part;
   selectedFiles: FileRef[];
   onRestore?: (paths: string[], mode: string | null, deviceId: string) => void;
+  /** 지금 실제로 존재하는 파일 경로 목록 — 예전 기록이 가리키는 파일이 삭제·이름
+   * 변경됐는지 확인하는 데 쓴다. 아직 안 불러왔으면 null(그동안은 표시 안 함). */
+  existingPaths?: Set<string> | null;
+  /** 다시 시작할 수 없는(파일이 사라진) 기록을 지운다. */
+  onDeleteLog?: (fileKey: string, deviceId: string) => void;
 }
 
 /**
@@ -24,7 +29,7 @@ function logKey(l: LearningLogEntry): string {
   return `${l.fileKey}::${l.deviceId}`;
 }
 
-export default function SessionInfoPanel({ userId, ready, part, selectedFiles, onRestore }: Props) {
+export default function SessionInfoPanel({ userId, ready, part, selectedFiles, onRestore, existingPaths, onDeleteLog }: Props) {
   const [logs, setLogs] = useState<LearningLogEntry[]>([]);
   const [viewingKey, setViewingKey] = useState<string>(""); // "" = 현재 선택된 파일 기준
 
@@ -45,6 +50,7 @@ export default function SessionInfoPanel({ userId, ready, part, selectedFiles, o
   const displayLog = viewed ?? currentLog;
   const percent = displayLog && displayLog.totalCount > 0 ? Math.round((displayLog.doneCount / displayLog.totalCount) * 100) : 0;
   const remain = displayLog ? Math.max(0, displayLog.totalCount - displayLog.doneCount) : 0;
+  const displayUnusable = displayLog && existingPaths ? isFileKeyMissing(displayLog.fileKey, existingPaths) : false;
 
   return (
     <div className="mt-4 study-card p-4">
@@ -91,15 +97,39 @@ export default function SessionInfoPanel({ userId, ready, part, selectedFiles, o
             style={{ background: "var(--hint-bg)", color: "var(--text)", border: "1px solid var(--card-border)" }}
           >
             <option value="">현재 선택한 파일 기준</option>
-            {logs.map((l) => (
-              <option key={logKey(l)} value={logKey(l)}>
-                {l.fileSummary} · {l.deviceLabel}
-                {l.isThisDevice ? " (이 기기)" : ""} · {formatKstDateTime(l.updatedAt)}
-              </option>
-            ))}
+            {logs.map((l) => {
+              const missing = existingPaths ? isFileKeyMissing(l.fileKey, existingPaths) : false;
+              return (
+                <option key={logKey(l)} value={logKey(l)}>
+                  {missing ? "⚠ (학습 불가) " : ""}
+                  {l.fileSummary} · {l.deviceLabel}
+                  {l.isThisDevice ? " (이 기기)" : ""} · {formatKstDateTime(l.updatedAt)}
+                </option>
+              );
+            })}
           </select>
 
-          {displayLog && onRestore && (
+          {displayUnusable && (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 rounded-lg py-1.5 text-center text-[11px] font-bold" style={{ background: "var(--hint-bg)", color: "var(--red)" }}>
+                학습 불가 — 원본 파일이 삭제되었거나 이름이 바뀌었어요
+              </div>
+              {displayLog && onDeleteLog && (
+                <button
+                  onClick={() => {
+                    onDeleteLog(displayLog.fileKey, displayLog.deviceId);
+                    setViewingKey("");
+                    setLogs((prev) => prev.filter((l) => logKey(l) !== logKey(displayLog)));
+                  }}
+                  className="btn-3d btn-red shrink-0 px-3 py-1.5 text-xs"
+                >
+                  삭제
+                </button>
+              )}
+            </div>
+          )}
+
+          {displayLog && !displayUnusable && onRestore && (
             <button
               onClick={() => {
                 onRestore(displayLog.fileKey.split("|"), displayLog.mode, displayLog.deviceId);
