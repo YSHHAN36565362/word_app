@@ -65,6 +65,14 @@ export interface PracticeProgress {
   displaySide: 0 | 1;
   totalCount: number;
   doneCount: number;
+  /** "이번 라운드" 진행에만 쓰는 값 — 완벽함뿐 아니라 조금 앎도 여기에는 포함된다
+   * (단어는 큐에 남아 다시 나오지만, 그래도 "이번 라운드"에 응답했다고는 쳐준다).
+   * doneCount(완료 카운트·전체 진행률·DB 통계용)와는 별개라서 이 값이 늘어나도
+   * "전체 완료 개수" 같은 기존 통계는 전혀 영향받지 않는다. 이 필드가 없는 예전
+   * 저장 기록은 doneCount로 대신한다(예전엔 완벽함만 라운드에 반영됐으므로 항상
+   * 같은 값이었다).
+   */
+  roundCount?: number;
 }
 
 export interface ExamProgress {

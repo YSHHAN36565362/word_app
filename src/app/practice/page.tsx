@@ -87,6 +87,7 @@ interface UndoSnapshot {
   queue: WordEntry[];
   current: WordEntry;
   doneCount: number;
+  roundCount: number;
   displaySide: 0 | 1;
   showAnswer: boolean;
   showHint: boolean;
@@ -144,6 +145,10 @@ function PracticePageInner() {
   const [displaySide, setDisplaySide] = useState<0 | 1>(0);
   const [total, setTotal] = useState(0);
   const [doneCount, setDoneCount] = useState(0);
+  // "이번 라운드" 표시 전용 — 완벽함뿐 아니라 조금 앎도 반영한다(단어는 큐에 남아
+  // 다시 나오지만, 그래도 이번 라운드에 응답은 한 것으로 쳐준다). doneCount(전체
+  // 완료·DB 통계)와는 완전히 분리돼 있어서 여기 값이 늘어도 기존 통계는 그대로다.
+  const [roundCount, setRoundCount] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [mascotState, setMascotState] = useState<MascotState>("idle");
@@ -268,7 +273,17 @@ function PracticePageInner() {
     }
   }
 
-  function persist(next: { queue: WordEntry[]; current: WordEntry | null; total: number; done: number; side: 0 | 1; m: StudyMode; labels: string[]; paths: string[] }) {
+  function persist(next: {
+    queue: WordEntry[];
+    current: WordEntry | null;
+    total: number;
+    done: number;
+    round: number;
+    side: 0 | 1;
+    m: StudyMode;
+    labels: string[];
+    paths: string[];
+  }) {
     if (!userId) return;
     const data: PracticeProgress = {
       filesLabel: next.labels,
@@ -279,6 +294,7 @@ function PracticePageInner() {
       displaySide: next.side,
       totalCount: next.total,
       doneCount: next.done,
+      roundCount: next.round,
     };
     const key = fileKeyOf(next.paths);
     saveProgress(userId, "practice", data, key);
@@ -337,6 +353,7 @@ function PracticePageInner() {
     setCurrent(first);
     setTotal(pool.length);
     setDoneCount(0);
+    setRoundCount(0);
     setDisplaySide(side);
     setShowAnswer(false);
     setShowHint(false);
@@ -352,7 +369,7 @@ function PracticePageInner() {
     setLastUndo(null);
     setFocus(true);
 
-    persist({ queue: q, current: first, total: pool.length, done: 0, side, m: selectedMode, labels, paths });
+    persist({ queue: q, current: first, total: pool.length, done: 0, round: 0, side, m: selectedMode, labels, paths });
   }
 
   async function begin(selectedMode: StudyMode) {
@@ -387,6 +404,9 @@ function PracticePageInner() {
     setCurrent(saved.currentWord);
     setTotal(saved.totalCount);
     setDoneCount(saved.doneCount);
+    // 예전에 저장된 기록엔 roundCount가 없다(그때는 완벽함만 라운드에 반영돼서
+    // doneCount와 항상 같았다) — 그 경우 doneCount로 대신한다.
+    setRoundCount(saved.roundCount ?? saved.doneCount);
     setDisplaySide(saved.displaySide);
     setShowAnswer(false);
     setShowHint(false);
@@ -484,7 +504,7 @@ function PracticePageInner() {
     if (!window.confirm("단어를 섞으시겠습니까?\n모름/헷갈림 단어가 다시 나올 순서가 흐트러질 수 있어요.")) return;
     setQueue((prev) => {
       const next = shuffle(prev);
-      persist({ queue: next, current, total, done: doneCount, side: displaySide, m: mode, labels: filesLabel, paths: activeFilePaths });
+      persist({ queue: next, current, total, done: doneCount, round: roundCount, side: displaySide, m: mode, labels: filesLabel, paths: activeFilePaths });
       return next;
     });
   }
@@ -503,6 +523,7 @@ function PracticePageInner() {
       queue,
       current,
       doneCount,
+      roundCount,
       displaySide,
       showAnswer,
       showHint,
@@ -529,11 +550,15 @@ function PracticePageInner() {
       nextQueue = deduped;
       nextDone += removed;
     }
+    // "이번 라운드"는 완벽함뿐 아니라 조금 앎도 진행으로 쳐준다(단어는 그대로 큐에
+    // 남아 다시 나온다) — 헷갈림·모름은 아직 라운드 진행으로 치기엔 이르다고 보고
+    // 제외한다.
+    const nextRound = level === 100 || level === 60 ? roundCount + 1 : roundCount;
     const nextCurrent = nextQueue.length > 0 ? nextQueue.shift()! : null;
     const nextSide = getDisplaySide(mode);
     // 라운드 하나를 막 채웠고(전에는 아니었고) 아직 큐에 남은 게 있으면, 다음 카드로
     // 바로 넘어가는 대신 짧은 라운드 완료 화면을 한 번 보여준다.
-    const crossedRound = nextDone > doneCount && nextDone % userRoundSize === 0 && (nextQueue.length > 0 || nextCurrent !== null);
+    const crossedRound = nextRound > roundCount && nextRound % userRoundSize === 0 && (nextQueue.length > 0 || nextCurrent !== null);
 
     const nextInfo = computeNextMastery(mastery.get(key), level);
 
@@ -550,6 +575,7 @@ function PracticePageInner() {
     setQueue(nextQueue);
     setCurrent(nextCurrent ?? null);
     setDoneCount(nextDone);
+    setRoundCount(nextRound);
     setDisplaySide(nextSide);
     setShowAnswer(false);
     setShowHint(false);
@@ -566,7 +592,7 @@ function PracticePageInner() {
     if (crossedRound) setRoundGateOpen(true);
     setLastUndo(snapshot);
 
-    persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, side: nextSide, m: mode, labels: filesLabel, paths: activeFilePaths });
+    persist({ queue: nextQueue, current: nextCurrent, total, done: nextDone, round: nextRound, side: nextSide, m: mode, labels: filesLabel, paths: activeFilePaths });
     if (userId) saveWordMastery(userId, current, nextInfo);
   }
 
@@ -580,6 +606,7 @@ function PracticePageInner() {
     setQueue(u.queue);
     setCurrent(u.current);
     setDoneCount(u.doneCount);
+    setRoundCount(u.roundCount);
     setDisplaySide(u.displaySide);
     setShowAnswer(u.showAnswer);
     setShowHint(u.showHint);
@@ -598,7 +625,7 @@ function PracticePageInner() {
       return next;
     });
 
-    persist({ queue: u.queue, current: u.current, total, done: u.doneCount, side: u.displaySide, m: mode, labels: filesLabel, paths: activeFilePaths });
+    persist({ queue: u.queue, current: u.current, total, done: u.doneCount, round: u.roundCount, side: u.displaySide, m: mode, labels: filesLabel, paths: activeFilePaths });
     if (userId) {
       if (u.prevMasteryInfo) saveWordMastery(userId, u.current, u.prevMasteryInfo);
       else resetWordMastery(userId, u.current);
@@ -686,12 +713,13 @@ function PracticePageInner() {
     const unknownRange = requeueRangeBounds(0, userRoundSize);
     const shakyRange = requeueRangeBounds(40, userRoundSize);
     const learnedRange = requeueRangeBounds(60, userRoundSize);
-    // doneCount가 라운드 크기의 정확한 배수인 순간은 두 가지 의미가 있다: 라운드 완료
+    // roundCount가 라운드 크기의 정확한 배수인 순간은 두 가지 의미가 있다: 라운드 완료
     // 화면이 떠 있는 동안은 "방금 끝난 라운드가 꽉 찼다"(가득 찬 바), 그 화면을 닫고
     // 다음 라운드로 넘어간 뒤에는 "새 라운드에서 아직 아무것도 안 했다"(빈 바)는 뜻이라
-    // roundGateOpen 여부로 둘을 구분한다.
-    const atRoundBoundary = doneCount > 0 && doneCount % roundSize === 0;
-    const posInRound = atRoundBoundary && !roundGateOpen ? 0 : doneCount === 0 ? 0 : ((doneCount - 1) % roundSize) + 1;
+    // roundGateOpen 여부로 둘을 구분한다. (완벽함뿐 아니라 조금 앎도 여기 반영된다 —
+    // doneCount와는 별개다.)
+    const atRoundBoundary = roundCount > 0 && roundCount % roundSize === 0;
+    const posInRound = atRoundBoundary && !roundGateOpen ? 0 : roundCount === 0 ? 0 : ((roundCount - 1) % roundSize) + 1;
     const roundRatio = roundSize > 0 ? posInRound / roundSize : 0;
 
     return (
