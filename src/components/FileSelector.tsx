@@ -7,7 +7,7 @@ import { extractYearMonth } from "@/lib/parser";
 // 처음 들어왔을 때는 N2·N3만 체크된 상태로 시작한다 — 나머지(N1, 새로 생긴 다른
 // 세부카테고리 등)는 사용자가 직접 눌러야만 켜지도록 해서, 매번 전부 다 켜져 있어
 // 목록이 너무 커지는 걸 막는다.
-const DEFAULT_CHECKED_SUBFOLDERS = new Set(["N2", "N3"]);
+const DEFAULT_CHECKED_SUBFOLDERS = new Set(["N2"]);
 function defaultSelectedSubs(subfolders: SubfolderNode[]): Set<string> {
   return new Set(subfolders.filter((s) => DEFAULT_CHECKED_SUBFOLDERS.has(s.name)).map((s) => s.name));
 }
