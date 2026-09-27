@@ -1,58 +1,102 @@
 import "server-only";
-import fs from "node:fs/promises";
-import path from "node:path";
 
 /**
- * word_list 폴더가 이제 이 저장소(word_app) 루트에 직접 들어있으므로,
- * GitHub API를 거치지 않고 Node.js 파일시스템으로 바로 읽는다.
- * 토큰도, 네트워크 요청도 필요 없다. 로컬 개발과 Vercel 배포 양쪽에서 동작한다.
+ * word_list 데이터는 word_test 저장소(GITHUB_OWNER/GITHUB_REPO)에 있고,
+ * word_app 로컬 파일시스템에는 복사본이 없다. 그래서 tree/route.ts와 동일하게
+ * GitHub Contents API로 실시간 조회한다.
  *
- * 주의(읽기 전용): 이 함수들은 읽기만 한다. Vercel의 서버리스 함수는 배포 후
- * 파일시스템이 읽기 전용이라, 단어장 업로드처럼 "쓰기"가 필요한 기능은
- * 여전히 github.ts의 uploadTextToGithub()로 GitHub API를 통해 해야 한다.
+ * 함수 이름(getDirNamesLocal 등)은 기존 호출부(route.ts, script/route.ts)를
+ * 건드리지 않기 위해 그대로 유지했다 — 내부 구현만 "로컬 파일" -> "GitHub API"로 바뀜.
+ *
+ * Next.js의 fetch 캐시(revalidate: 300)를 사용하므로, 같은 경로에 대한 요청은
+ * 5분에 한 번 정도만 실제 GitHub 호출로 이어진다.
  */
 
-function resolvePath(relPath: string): string {
-  return path.join(process.cwd(), relPath);
+const OWNER = process.env.GITHUB_OWNER || "";
+const REPO = process.env.GITHUB_REPO || "";
+const BRANCH = process.env.GITHUB_BRANCH || "main";
+const TOKEN = process.env.GITHUB_TOKEN || "";
+
+interface GithubEntry {
+  name: string;
+  type: "file" | "dir";
+  path: string;
+}
+
+interface GithubFileContent {
+  content?: string;
+  encoding?: string;
+}
+
+interface ContentsResult {
+  status: number;
+  data: GithubEntry[] | GithubFileContent | null;
+}
+
+function apiHeaders(): HeadersInit {
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+  };
+  if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
+  return headers;
+}
+
+async function fetchContents(relPath: string): Promise<ContentsResult> {
+  if (!OWNER || !REPO) return { status: 500, data: null };
+
+  const encodedPath = relPath
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodedPath}?ref=${encodeURIComponent(
+    BRANCH
+  )}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: apiHeaders(),
+      next: { revalidate: 300 },
+    });
+    const data = await res.json().catch(() => null);
+    return { status: res.status, data };
+  } catch {
+    return { status: 0, data: null };
+  }
 }
 
 export async function getDirNamesLocal(relPath: string): Promise<string[]> {
-  try {
-    const entries = await fs.readdir(resolvePath(relPath), { withFileTypes: true });
-    return entries
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name)
-      .sort((a, b) => a.localeCompare(b));
-  } catch {
-    return [];
-  }
+  const { status, data } = await fetchContents(relPath);
+  if (status !== 200 || !Array.isArray(data)) return [];
+  return data
+    .filter((e) => e.type === "dir")
+    .map((e) => e.name)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 export async function getTxtFilesLocal(relPath: string): Promise<string[]> {
-  try {
-    const entries = await fs.readdir(resolvePath(relPath), { withFileTypes: true });
-    return entries
-      .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".txt"))
-      .map((e) => e.name)
-      .sort((a, b) => a.localeCompare(b));
-  } catch {
-    return [];
-  }
+  const { status, data } = await fetchContents(relPath);
+  if (status !== 200 || !Array.isArray(data)) return [];
+  return data
+    .filter((e) => e.type === "file" && e.name.toLowerCase().endsWith(".txt"))
+    .map((e) => e.name)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 export async function getFileContentLocal(relPath: string): Promise<string> {
+  const { status, data } = await fetchContents(relPath);
+  if (status !== 200 || !data || Array.isArray(data)) return "";
+  const file = data as GithubFileContent;
+  if (!file.content) return "";
   try {
-    return await fs.readFile(resolvePath(relPath), "utf-8");
+    return Buffer.from(file.content, (file.encoding as BufferEncoding) || "base64").toString(
+      "utf-8"
+    );
   } catch {
     return "";
   }
 }
 
 export async function pathExistsLocal(relPath: string): Promise<boolean> {
-  try {
-    await fs.access(resolvePath(relPath));
-    return true;
-  } catch {
-    return false;
-  }
+  const { status } = await fetchContents(relPath);
+  return status === 200;
 }
