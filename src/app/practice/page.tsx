@@ -688,11 +688,20 @@ function PracticePageInner() {
       Numpad2: () => { if (showAnswer) score(0); },
       Numpad4: () => { if (showAnswer) score(60); },
       Numpad6: () => { if (showAnswer) score(40); },
+      c: () => setScoreBtnsHidden(!scoreBtnsHidden),
+      KeyC: () => setScoreBtnsHidden(!scoreBtnsHidden),
     },
-    // 라운드 완료 화면이 떠 있는 동안은 카드가 안 보이므로 단축키도 꺼둔다 — 안 그러면
-    // "정답 확인"/채점 키를 눌렀을 때 화면에 없는 다음 라운드 첫 단어가 몰래 넘어간다.
     focus && !finished && current !== null && !roundGateOpen
   );
+      //Numpad8: () => { if (showAnswer) score(100); },
+      //Numpad2: () => { if (showAnswer) score(0); },
+      //Numpad4: () => { if (showAnswer) score(60); },
+      //Numpad6: () => { if (showAnswer) score(40); },
+    //},
+    // 라운드 완료 화면이 떠 있는 동안은 카드가 안 보이므로 단축키도 꺼둔다 — 안 그러면
+    // "정답 확인"/채점 키를 눌렀을 때 화면에 없는 다음 라운드 첫 단어가 몰래 넘어간다.
+    //focus && !finished && current !== null && !roundGateOpen
+  //);
 
   // 되돌리기는 위 채점 단축키들과 별도로 둔다 — 방금 채점이 하필 라운드를 막 채우거나
   // 세션을 끝내버린 경우에도(roundGateOpen/finished로 채점 단축키는 꺼진 상태) 되돌릴
@@ -960,7 +969,7 @@ function PracticePageInner() {
       </div>
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
         단축키: Space/Enter=정답 확인 · 1~4=모름·헷갈림·조금앎·완벽함 · ↑/W/Num8=완벽함 ·
-        ↓/S/Num2=모름 · ←/A/Num4=조금앎 · →/D/Num6=헷갈림 · S(답 열기 전)=발음 듣기
+        ↓/S/Num2=모름 · ←/A/Num4=조금앎 · →/D/Num6=헷갈림 · S(답 열기 전)=발음 듣기 · C=버튼 開ける・閉める · M=메모장 開ける・閉める
       </p>
 
       {ready && !userId && (

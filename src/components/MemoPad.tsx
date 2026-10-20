@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 const DEFAULT_WIDTH = 280;
 const DEFAULT_HEIGHT = 220;
@@ -40,8 +41,14 @@ export default function MemoPad() {
   const [open, setOpen] = useState(false);
   const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null); // null = 기본 위치(우하단)
+
   const [pencilOnly, setPencilOnly] = useState(false);
   const [lineWidth, setLineWidth] = useState(DEFAULT_LINE_WIDTH);
+
+  useKeyboardShortcuts({
+    m: () => setOpen((prev) => !prev),
+    KeyM: () => setOpen((prev) => !prev),
+  });
 
   const panelRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
