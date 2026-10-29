@@ -1,31 +1,25 @@
 import { NextResponse } from "next/server";
-import { githubGetContents, getDirNames, getTxtFiles } from "@/lib/github";
+import { getDirNamesLocal, getTxtFilesLocal, pathExistsLocal } from "@/lib/wordlist-fs";
 import { CategoryNode, FileRef } from "@/lib/types";
 
 export const revalidate = 300;
 
 /**
  * word_list 폴더 전체를 순회해서 { 대분류 -> [세부카테고리 -> 파일들]} 트리를 만든다.
- * Next.js의 fetch 캐시(revalidate)가 요청을 공유하므로, 학생 30명이 동시에 접속해도
- * 실제 GitHub 호출은 5분에 한 번 정도만 일어난다.
+ * word_list는 이 저장소(word_app) 루트에 들어 있으므로 GitHub API 없이 파일시스템으로 읽는다.
  *
- * 최상위 word_list 조회가 실패하면(환경변수 누락, GitHub API 요청 한도 초과 등) 이유를
- * 함께 돌려준다 — 그냥 "폴더 없음"으로 보이면 원인을 알 수 없기 때문.
+ * word_list 폴더가 없으면(배포에 포함되지 않았거나 경로가 틀린 경우) 이유를 함께 돌려준다 —
+ * 그냥 "폴더 없음"으로 보이면 원인을 알 수 없기 때문.
  */
 export async function GET() {
-  const top = await githubGetContents("word_list");
-  if (top.status !== 200 || !Array.isArray(top.data)) {
-    const reason =
-      top.error ??
-      (top.status === 403
-        ? "GitHub API 요청 한도를 초과했습니다. GITHUB_TOKEN 환경변수를 설정하면 한도가 늘어납니다."
-        : top.status === 404
-        ? "word_list 폴더를 찾을 수 없습니다 (GITHUB_OWNER/GITHUB_REPO/GITHUB_BRANCH 설정을 확인하세요)."
-        : `GitHub API 오류가 발생했습니다 (status: ${top.status}).`);
-    return NextResponse.json({ categories: [], error: reason }, { status: 200 });
+  if (!(await pathExistsLocal("word_list"))) {
+    return NextResponse.json(
+      { categories: [], error: "word_list 폴더를 찾을 수 없습니다 (word_app 루트에 word_list 폴더가 있는지 확인하세요)." },
+      { status: 200 }
+    );
   }
 
-  const mainCats = (await getDirNames("word_list")).sort((a, b) => {
+  const mainCats = (await getDirNamesLocal("word_list")).sort((a, b) => {
     // "Japanese"를 항상 맨 앞에 둔다 (가장 자주 쓰는 카테고리라 기본 선택도 이걸로 감).
     // 나머지는 원래대로 이름순.
     if (a === "Japanese") return -1;
@@ -35,12 +29,12 @@ export async function GET() {
   const categories: CategoryNode[] = [];
 
   for (const main of mainCats) {
-    const subNames = await getDirNames(`word_list/${main}`);
+    const subNames = await getDirNamesLocal(`word_list/${main}`);
     if (subNames.length > 0) {
       const subfolders = [];
       for (const sub of subNames) {
         const path = `word_list/${main}/${sub}`;
-        const files = await getTxtFiles(path);
+        const files = await getTxtFilesLocal(path);
         const fileRefs: FileRef[] = files.map((f) => ({
           path: `${path}/${f}`,
           label: `[${sub}] ${f}`,
@@ -51,7 +45,7 @@ export async function GET() {
       categories.push({ name: main, subfolders, files: [] });
     } else {
       const path = `word_list/${main}`;
-      const files = await getTxtFiles(path);
+      const files = await getTxtFilesLocal(path);
       const fileRefs: FileRef[] = files.map((f) => ({
         path: `${path}/${f}`,
         label: f,

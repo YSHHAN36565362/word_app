@@ -58,7 +58,7 @@ Streamlit版(`word_test`)を2ヶ月以上毎日使ってみて、機能よりも
 | 種別 | 個人プロジェクト (実利用目的) |
 | フレームワーク | Next.js (App Router) + TypeScript |
 | 実行形態 | モバイルWebアプリ (PWA、ホーム画面インストール対応) |
-| 単語帳データストア | GitHubリポジトリ (Contents API), [`word_test`](https://github.com/YSHHAN36565362/word_test) |
+| 単語帳データストア | このリポジトリの`word_list/`フォルダ (読み取りはファイルシステム、追加はGitHub Contents API経由のコミット) |
 | 進捗データストア | Supabase (Postgres) |
 | 旧バージョン | [`word_test`](https://github.com/YSHHAN36565362/word_test) — Streamlit版・プロトタイプ、同じデータ/ロジックを共有 |
 
@@ -279,10 +279,12 @@ UIは絵文字を使わず、テキストとアイコンだけでシンプルに
 
 ### GitHubを単語帳データベースとして
 
-個人用の学習ツールにDBサーバーを別途立てるのは過剰です。そこで**GitHub Contents API**
-を単語帳のデータ層としてそのまま使いました。ただしトークンがブラウザに露出しては
-いけないため、ブラウザはGitHub APIを直接呼び出さず、Next.jsサーバー(Route Handler)が
-代わりに呼び出します。
+個人用の学習ツールにDBサーバーを別途立てるのは過剰です。そこで単語帳のtxtファイルを
+このリポジトリの`word_list/`フォルダにそのまま置き、リポジトリ自体をデータ層にしました。
+読み取りはNext.jsサーバー(Route Handler)がファイルシステムから直接行うため、別リポジトリ
+へのGitHub API呼び出しも、リクエスト上限もありません。単語帳の追加だけは、トークンが
+ブラウザに露出しないようサーバーが**GitHub Contents API**でこのリポジトリにコミットし、
+Vercelの再デプロイ後に反映されます。
 
 | 機能 | 実装 |
 |---|---|
@@ -448,9 +450,8 @@ cp .env.example .env.local   # 下記の「環境変数」を参考に値を入�
 npm run dev
 ```
 
-`GITHUB_TOKEN`がなくても(公開リポジトリのため)単語帳の読み込みはできますが、1時間
-あたりのリクエスト上限が60回と低く、アクセスが多いとすぐに枯渇します。トークンの
-設定を推奨します。
+単語帳の読み込みは`word_list/`フォルダを直接読むため、`GITHUB_TOKEN`は不要です
+(単語帳の追加=書き込みにだけ必要です)。
 
 #### 環境変数
 
@@ -459,8 +460,8 @@ Variablesに以下を登録します。
 
 | 変数 | 用途 | 必須 |
 |---|---|---|
-| `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_BRANCH` | 単語帳があるリポジトリ (`YSHHAN36565362/word_test`, `main`) | 必須 |
-| `GITHUB_TOKEN` | 単語帳追加(書き込み) + 読み込み上限の引き上げ。repoにContents: Read and write権限を持つFine-grained PAT | 書き込み機能に必須 |
+| `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_BRANCH` | 単語帳追加(書き込み)のコミット先 = このリポジトリ (`YSHHAN36565362/word_app`, `main`) | 書き込み機能に必須 |
+| `GITHUB_TOKEN` | 単語帳追加(書き込み)用。repoにContents: Read and write権限を持つFine-grained PAT | 書き込み機能に必須 |
 | `UPLOAD_PASSWORD` | 単語帳追加時に確認するパスワード | 書き込み機能に必須 |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 進捗/誤答ノート/統計の同期 | 同期機能に必須 (Vercel Supabase Integrationが`STORAGE_`接頭辞で保存している場合はそのままでも`/api/config`が代わりに読み込みます) |
 
@@ -487,7 +488,7 @@ SQL Editorに再度貼り付けて実行すれば、新しい列だけが追加�
 #### GitHubトークンの発行 (単語帳追加用)
 
 1. GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token。
-2. Repository accessを`word_test`リポジトリに限定。
+2. Repository accessを`word_app`リポジトリに限定。
 3. Permissions → Contents: Read and write。
 4. 発行されたトークンを`GITHUB_TOKEN`に設定。
 
@@ -591,7 +592,7 @@ Streamlit 버전(`word_test`)으로 두 달 넘게 매일 써보니, 기능보�
 | 유형 | 개인 프로젝트 (실사용 목적) |
 | 프레임워크 | Next.js (App Router) + TypeScript |
 | 실행 형태 | 모바일 웹앱 (PWA, 홈 화면 설치 지원) |
-| 단어장 데이터 저장소 | GitHub 저장소 (Contents API), [`word_test`](https://github.com/YSHHAN36565362/word_test) |
+| 단어장 데이터 저장소 | 이 저장소의 `word_list/` 폴더 (읽기는 파일시스템, 추가는 GitHub Contents API 커밋) |
 | 진행 상황 저장소 | Supabase (Postgres) |
 | 이전 버전 | [`word_test`](https://github.com/YSHHAN36565362/word_test) — Streamlit 버전 · 프로토타입, 같은 데이터/로직을 공유 |
 
@@ -808,10 +809,11 @@ UI에서는 이모티콘을 쓰지 않고 텍스트와 아이콘만으로 간결
 
 ### GitHub을 단어장 데이터베이스로
 
-개인 학습 도구에 DB 서버를 따로 띄우는 것은 과합니다. 그래서 **GitHub Contents API**를
-단어장 데이터 계층으로 그대로 사용했습니다. 다만 토큰이 브라우저에 노출되면 안 되므로,
-브라우저는 GitHub API를 직접 호출하지 않고 Next.js 서버(Route Handler)가 대신
-호출합니다.
+개인 학습 도구에 DB 서버를 따로 띄우는 것은 과합니다. 그래서 단어장 txt 파일을 이
+저장소의 `word_list/` 폴더에 그대로 두고, 저장소 자체를 데이터 계층으로 썼습니다.
+읽기는 Next.js 서버(Route Handler)가 파일시스템에서 직접 하므로 다른 저장소로의
+GitHub API 호출도, 요청 한도도 없습니다. 단어장 추가만은 토큰이 브라우저에 노출되지
+않도록 서버가 **GitHub Contents API**로 이 저장소에 커밋하며, Vercel 재배포 후 반영됩니다.
 
 | 기능 | 구현 |
 |---|---|
@@ -977,8 +979,8 @@ cp .env.example .env.local   # 아래 "환경변수" 참고해서 값 채우기
 npm run dev
 ```
 
-`GITHUB_TOKEN` 없이도(공개 저장소이므로) 단어장 읽기는 되지만, 시간당 요청 한도가
-60회로 낮아 접속자가 많으면 금방 소진됩니다. 토큰을 넣는 것을 권장합니다.
+단어장 읽기는 `word_list/` 폴더를 직접 읽으므로 `GITHUB_TOKEN`이 필요 없습니다
+(단어장 추가=쓰기에만 필요).
 
 #### 환경변수
 
@@ -987,8 +989,8 @@ npm run dev
 
 | 변수 | 용도 | 필수 |
 |---|---|---|
-| `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_BRANCH` | 단어장이 있는 저장소 (`YSHHAN36565362/word_test`, `main`) | 필수 |
-| `GITHUB_TOKEN` | 단어장 추가(쓰기) + 읽기 한도 상향. repo에 Contents: Read and write 권한의 Fine-grained PAT | 쓰기 기능에 필수 |
+| `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_BRANCH` | 단어장 추가(쓰기) 커밋 대상 = 이 저장소 (`YSHHAN36565362/word_app`, `main`) | 쓰기 기능에 필수 |
+| `GITHUB_TOKEN` | 단어장 추가(쓰기)용. repo에 Contents: Read and write 권한의 Fine-grained PAT | 쓰기 기능에 필수 |
 | `UPLOAD_PASSWORD` | 단어장 추가 시 확인하는 비밀번호 | 쓰기 기능에 필수 |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 진행 상황/오답노트/통계 동기화 | 동기화 기능에 필수 (Vercel Supabase Integration이 `STORAGE_` 접두사로 저장했다면 그대로 둬도 `/api/config`가 대신 읽음) |
 
@@ -1015,7 +1017,7 @@ SQL Editor에 다시 붙여넣어 실행하면 새 컬럼만 추가되고 기존
 #### GitHub 토큰 발급 (단어장 추가용)
 
 1. GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token.
-2. Repository access를 `word_test` 저장소로 제한.
+2. Repository access를 `word_app` 저장소로 제한.
 3. Permissions → Contents: Read and write.
 4. 발급된 토큰을 `GITHUB_TOKEN`에 설정.
 
