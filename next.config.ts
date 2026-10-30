@@ -38,8 +38,22 @@ function wordListUpdatedAt(): string {
   return latest ? new Date(latest).toISOString() : "";
 }
 
+// 프로그램(앱 코드) 마지막 수정 시각: 단어장·로그 폴더를 뺀 나머지를 바꾼 가장 최근 커밋의 시각.
+function programUpdatedAt(): string {
+  try {
+    return execSync("git log -1 --format=%cI -- . ':(exclude)word_list' ':(exclude)log'", {
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return "";
+  }
+}
+
 const nextConfig: NextConfig = {
   env: {
+    NEXT_PUBLIC_PROGRAM_UPDATED_AT: programUpdatedAt(),
     NEXT_PUBLIC_WORDLIST_UPDATED_AT: wordListUpdatedAt(),
   },
   // word_list는 fs.readFile(런타임 문자열 경로)로 읽기 때문에, Vercel의 정적 분석이
