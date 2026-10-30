@@ -184,3 +184,45 @@ export async function deleteFileFromGithub(repoPath: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * 지정한 경로(들) 중 하나라도 바꾼 가장 최근 커밋의 시각(ISO)을 돌려준다. 실패하면 null.
+ * 경로마다 커밋 목록을 1건씩 조회해서 그중 가장 늦은 값을 쓴다.
+ *
+ * 저장소는 Vercel이 자동으로 넣어 주는 VERCEL_GIT_REPO_OWNER/SLUG(= 지금 배포 중인 앱의 저장소)를
+ * 먼저 쓰고, 없으면 GITHUB_OWNER/GITHUB_REPO를 쓴다. 토큰이 잘못돼 401이 나면 토큰 없이 한 번 더
+ * 시도한다(공개 저장소는 토큰 없이도 읽힌다).
+ */
+export async function githubLastCommitDate(paths: string[], revalidateSeconds = 600): Promise<string | null> {
+  let base: string;
+  try {
+    const o = process.env.VERCEL_GIT_REPO_OWNER || owner();
+    const r = process.env.VERCEL_GIT_REPO_SLUG || repo();
+    base = `https://api.github.com/repos/${o}/${r}/commits`;
+  } catch {
+    return null;
+  }
+  const query = async (p: string, withToken: boolean): Promise<Response> => {
+    const h = headers();
+    if (!withToken) delete h.Authorization;
+    return fetch(`${base}?sha=${encodeURIComponent(branch())}&path=${encodeURIComponent(p)}&per_page=1`, {
+      headers: h,
+      next: { revalidate: revalidateSeconds },
+    });
+  };
+  const dates = await Promise.all(
+    paths.map(async (p) => {
+      try {
+        let res = await query(p, true);
+        if (res.status === 401) res = await query(p, false);
+        if (res.status !== 200) return null;
+        const list = await res.json();
+        return (list?.[0]?.commit?.committer?.date as string | undefined) ?? null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  const valid = dates.filter((d): d is string => !!d).sort();
+  return valid.length ? valid[valid.length - 1] : null;
+}

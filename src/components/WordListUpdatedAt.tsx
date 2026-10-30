@@ -1,5 +1,9 @@
-const WORDLIST_AT = process.env.NEXT_PUBLIC_WORDLIST_UPDATED_AT;
-const PROGRAM_AT = process.env.NEXT_PUBLIC_PROGRAM_UPDATED_AT;
+"use client";
+
+import { useEffect, useState } from "react";
+
+const BUILD_WORDLIST_AT = process.env.NEXT_PUBLIC_WORDLIST_UPDATED_AT ?? "";
+const BUILD_PROGRAM_AT = process.env.NEXT_PUBLIC_PROGRAM_UPDATED_AT ?? "";
 
 // 한국 시간 기준 "YYYY.MM.DD.HH.mm" 으로 만든다(서버·클라이언트 어디서 렌더해도 같은 결과).
 function format(iso: string): string | null {
@@ -20,6 +24,24 @@ function format(iso: string): string | null {
 
 /** 모든 화면 오른쪽 위에 작게 보이는 "단어장 / 프로그램" 마지막 수정 시각. 라이트=검정, 다크=흰색. */
 export default function WordListUpdatedAt() {
+  // 처음엔 빌드 때 계산한 값을 보여 주고, GitHub에서 가져온 최신 값이 오면 바꾼다.
+  const [times, setTimes] = useState({ wordlist: BUILD_WORDLIST_AT, program: BUILD_PROGRAM_AT });
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/updated-at")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d) setTimes({ wordlist: d.wordlist || BUILD_WORDLIST_AT, program: d.program || BUILD_PROGRAM_AT });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const WORDLIST_AT = times.wordlist;
+  const PROGRAM_AT = times.program;
   const rows = [
     { label: "단어장", text: WORDLIST_AT ? format(WORDLIST_AT) : null },
     { label: "프로그램", text: PROGRAM_AT ? format(PROGRAM_AT) : null },
