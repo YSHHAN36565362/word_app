@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { HintSectionKey, HintTheme, sectionOfLine } from "@/lib/hintTheme";
 import { useHintTheme } from "@/hooks/useHintTheme";
 
@@ -13,6 +14,32 @@ import { useHintTheme } from "@/hooks/useHintTheme";
  */
 const TAG_HEAD = /^(\s*\[[^\]]+\])(.*)$/;
 const KANJI_HEADER_TAG = /^\s*\[한자\d+\]/;
+
+/**
+ * 예문 구간의 태그 없는 줄(= 일본어 문장·히라가나 독음)은 흐리게 가려 두고,
+ * 마우스를 올리거나(PC) 탭하면(모바일) 보이게 해서 한국어 → 일본어 해석·읽기 연습에 쓴다.
+ */
+function BlurLine({ text }: { text: string }) {
+  const [peek, setPeek] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const shown = peek || pinned;
+  return (
+    <span
+      onMouseEnter={() => setPeek(true)}
+      onMouseLeave={() => setPeek(false)}
+      onClick={() => setPinned((v) => !v)}
+      style={{
+        display: "inline-block",
+        cursor: "pointer",
+        filter: shown ? "none" : "blur(7px)",
+        transition: "filter 0.15s",
+        userSelect: shown ? "auto" : "none",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
 
 export default function HintText({ text, theme: themeProp }: { text: string; theme?: HintTheme }) {
   // 보통은 이 안에서 직접 저장값을 읽어오지만, 같은 화면에 힌트 크기를 즉시 조절하는
@@ -47,6 +74,8 @@ export default function HintText({ text, theme: themeProp }: { text: string; the
             <b style={{ fontWeight: 800 }}>{m[1]}</b>
             {m[2]}
           </>
+        ) : section === "example" && line.replace(/\u200b/g, "").trim() !== "" ? (
+          <BlurLine text={line} />
         ) : (
           line
         )}
