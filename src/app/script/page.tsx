@@ -145,7 +145,7 @@ export default function ScriptPage() {
         subtitle="대화 및 지문을 순서대로 연상하며 외웁니다."
       />
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-        단축키: ←/→=이전/다음 문장
+        단축키: ←/→=이전/다음 문장 · M=메모장
       </p>
 
       {ready && !userId && (

@@ -226,6 +226,8 @@ export default function StudyPage() {
       KeyS: speakCurrent,
       n: skipToNextQuestion,
       KeyN: skipToNextQuestion,
+      k: () => { if (current) toggleFavorite(current); },
+      KeyK: () => { if (current) toggleFavorite(current); },
     },
     focus && !done
   );
@@ -289,6 +291,7 @@ export default function StudyPage() {
                 <SpeakButton text={current.word} compact />
                 <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
                   {favorites.has(wordKey(current)) ? "★" : "☆"}
+                  <KeyBadge>K</KeyBadge>
                 </button>
               </div>
               <div className="text-center font-semibold" style={{ fontSize: "calc(1.125rem * var(--study-font-scale, 1))" }}>
@@ -363,7 +366,7 @@ export default function StudyPage() {
         subtitle="단어를 순서대로 넘기며 훑어보는 1회독입니다."
       />
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-        단축키: ←/→=이전/다음 단어 · H/Space=힌트 보기 · S=발음 듣기
+        단축키: ←/→=이전/다음 단어 · H/Space=힌트 보기 · S=발음 듣기 · K=즐겨찾기 · M=메모장 · N=다음 질문(면접)
       </p>
 
       {ready && !userId && (

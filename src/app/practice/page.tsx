@@ -728,6 +728,8 @@ function PracticePageInner() {
       KeyC: () => setScoreBtnsHidden(!scoreBtnsHidden),
       n: () => { if (orderedMode) skipToNextQuestion(); },
       KeyN: () => { if (orderedMode) skipToNextQuestion(); },
+      k: () => { if (current) toggleFavorite(current); },
+      KeyK: () => { if (current) toggleFavorite(current); },
     },
     focus && !finished && current !== null && !roundGateOpen
   );
@@ -843,7 +845,7 @@ function PracticePageInner() {
                     className="rounded-2xl py-3 text-center text-xs font-bold"
                     style={{ color: "var(--text-muted)", background: "var(--hint-bg)" }}
                   >
-                    완벽함 위쪽 · 조금 앎 왼쪽 · 헷갈림 오른쪽 · 모름 아래쪽 (⚙ 설정에서 다시 켜기)
+                    완벽함 위쪽 · 조금 앎 왼쪽 · 헷갈림 오른쪽 · 모름 아래쪽 (⚙ 설정 또는 [C] 키로 다시 켜기)
                   </div>
                 ) : (
                   <div className="grid grid-cols-2" style={{ gap: `${0.75 * scoreBtnScale}rem` }}>
@@ -918,6 +920,7 @@ function PracticePageInner() {
               <SpeakButton text={current.word} compact />
               <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
                 {favorites.has(wordKey(current)) ? "★" : "☆"}
+                <KeyBadge>K</KeyBadge>
               </button>
             </div>
             <FlashCard
@@ -992,7 +995,7 @@ function PracticePageInner() {
           }}
           label="연습 종료하기"
           extraAction={[
-            ...(lastUndo ? [{ label: "되돌리기", onClick: undoLastScore }] : []),
+            ...(lastUndo ? [{ label: "되돌리기 [Backspace]", onClick: undoLastScore }] : []),
             ...(!finished && !roundGateOpen && orderedMode
               ? [{ label: "다음 질문으로 넘어가기 [N]", onClick: skipToNextQuestion }]
               : !finished && !roundGateOpen && queue.length > 1
@@ -1024,7 +1027,7 @@ function PracticePageInner() {
       </div>
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
         단축키: Space/Enter=정답 확인 · 1~4=모름·헷갈림·조금앎·완벽함 · ↑/W/Num8=완벽함 ·
-        ↓/S/Num2=모름 · ←/A/Num4=조금앎 · →/D/Num6=헷갈림 · S(답 열기 전)=발음 듣기 · C=버튼 開ける・閉める · M=메모장 開ける・閉める
+        ↓/S/Num2=모름 · ←/A/Num4=조금앎 · →/D/Num6=헷갈림 · S(답 열기 전)=발음 듣기 · C=채점 버튼 켜기/끄기 · K=즐겨찾기 · M=메모장 열기/닫기 · N=다음 질문(면접) · Backspace=되돌리기
       </p>
 
       {ready && !userId && (

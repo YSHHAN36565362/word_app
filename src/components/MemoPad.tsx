@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import KeyBadge from "@/components/KeyBadge";
 
 const DEFAULT_WIDTH = 280;
 const DEFAULT_HEIGHT = 220;
@@ -189,6 +190,7 @@ export default function MemoPad() {
           style={{ position: "fixed", bottom: "6.5rem", right: "1rem", zIndex: 50 }}
         >
           memo
+          <KeyBadge>M</KeyBadge>
         </button>
       )}
 
@@ -229,6 +231,7 @@ export default function MemoPad() {
           </span>
           <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setOpen(false)} className="btn-3d btn-ghost px-2.5 py-1 text-[11px]">
             닫기
+            <KeyBadge>M</KeyBadge>
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 px-3 py-2" style={{ borderBottom: "1px solid var(--card-border)" }}>

@@ -376,7 +376,7 @@ export default function ExamPage() {
         subtitle="출제 개수를 정하고 O/X로 채점합니다. 틀린 단어는 오답 노트에 자동으로 쌓입니다."
       />
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-        단축키: Space/Enter=정답 확인 · ←=틀림 →=맞음
+        단축키: Space/Enter=정답 확인 · ←=틀림 →=맞음 · M=메모장
       </p>
 
       {ready && !userId && (
