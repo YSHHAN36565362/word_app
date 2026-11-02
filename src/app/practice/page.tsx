@@ -931,7 +931,7 @@ function PracticePageInner() {
                   className="text-center font-extrabold"
                   style={{ fontSize: "calc(1.5rem * var(--practice-font-scale, 1))", whiteSpace: current?.ordered ? "pre-line" : undefined }}
                 >
-                  <Furigana text={current?.ordered ? formatInterviewFront(qText) : qText} />
+                  <Furigana text={current?.ordered ? formatInterviewFront(qText) : qText} enabled={false} />
                 </div>
               }
               back={

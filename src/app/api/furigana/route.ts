@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import path from "node:path";
 import kuromoji from "kuromoji";
+import kanjiData from "@/data/kanji.json";
 
 export const runtime = "nodejs";
 
@@ -26,9 +27,31 @@ function getTokenizer(): Promise<Tokenizer> {
 const KANJI = /[一-鿿々]/;
 const kataToHira = (s: string) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
 
+interface KanjiInfo {
+  c: string; // 한자
+  h: string; // 한국 한자음
+  j: string; // 일본 음독·훈독
+  e: string; // 영어 뜻
+}
+
 interface Token {
   s: string;
   r: string | null;
+  k?: KanjiInfo[]; // 한자 정보(읽기가 있는 조각에만)
+}
+
+const KANJI_DATA = kanjiData as Record<string, { h: string; j: string; e: string }>;
+
+function kanjiInfoOf(surface: string): KanjiInfo[] {
+  const seen = new Set<string>();
+  const out: KanjiInfo[] = [];
+  for (const c of surface) {
+    if (!KANJI.test(c) || seen.has(c)) continue;
+    seen.add(c);
+    const d = KANJI_DATA[c];
+    if (d) out.push({ c, h: d.h, j: d.j, e: d.e });
+  }
+  return out;
 }
 
 /**
@@ -50,10 +73,12 @@ export async function POST(req: Request) {
   try {
     const tokenizer = await getTokenizer();
     const results: Token[][] = texts.map((text) =>
-      tokenizer.tokenize(text).map((t) => ({
-        s: t.surface_form,
-        r: KANJI.test(t.surface_form) && t.reading && t.reading !== "*" ? kataToHira(t.reading) : null,
-      }))
+      tokenizer.tokenize(text).map((t) => {
+        const reading = t.reading && t.reading !== "*" ? t.reading : "";
+        return KANJI.test(t.surface_form) && reading
+          ? { s: t.surface_form, r: kataToHira(reading), k: kanjiInfoOf(t.surface_form) }
+          : { s: t.surface_form, r: null };
+      })
     );
     return NextResponse.json({ results });
   } catch (e) {

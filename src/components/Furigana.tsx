@@ -3,9 +3,17 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+interface KanjiInfo {
+  c: string;
+  h: string;
+  j: string;
+  e: string;
+}
+
 interface Tok {
   s: string;
   r: string | null;
+  k?: KanjiInfo[];
 }
 
 const KANJI = /[一-鿿々]/;
@@ -54,6 +62,7 @@ function load(text: string): Promise<Tok[] | null> {
 
 /**
  * 일본어 문장 안의 한자에 마우스를 올리면 히라가나 읽기를 툴팁으로 띄운다.
+ * 툴팁에는 읽기와 함께 한자별 정보(한국 한자음 · 일본 음독/훈독 · 영어 뜻)도 보여준다.
  * 한자가 없는 문장은 서버에 묻지 않고 그대로 출력한다. enabled=false(예: 블러로 가려둔 줄)면
  * 읽기가 보이지 않도록 일반 글자로만 출력한다.
  */
@@ -62,7 +71,7 @@ export default function Furigana({ text, enabled = true }: { text: string; enabl
     const hit = cache.get(text);
     return hit ? { text, toks: hit } : null;
   });
-  const [tip, setTip] = useState<{ r: string; x: number; y: number } | null>(null);
+  const [tip, setTip] = useState<{ r: string; k: KanjiInfo[]; x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!enabled || !KANJI.test(text)) return;
@@ -86,7 +95,7 @@ export default function Furigana({ text, enabled = true }: { text: string; enabl
             className="furi-token"
             onMouseEnter={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
-              setTip({ r: t.r as string, x: rect.left + rect.width / 2, y: rect.top });
+              setTip({ r: t.r as string, k: t.k ?? [], x: rect.left + rect.width / 2, y: rect.top });
             }}
             onMouseLeave={() => setTip(null)}
           >
@@ -99,7 +108,14 @@ export default function Furigana({ text, enabled = true }: { text: string; enabl
       {tip &&
         createPortal(
           <div className="furi-tip" style={{ left: tip.x, top: tip.y - 6 }}>
-            {tip.r}
+            <div className="furi-read">{tip.r}</div>
+            {tip.k.map((k) => (
+              <div key={k.c} className="furi-kanji">
+                <b>{k.c}</b> {k.h && <span className="furi-hangul">{k.h}</span>}
+                {k.j && <span> · {k.j}</span>}
+                {k.e && <span className="furi-en"> · {k.e}</span>}
+              </div>
+            ))}
           </div>,
           document.body
         )}

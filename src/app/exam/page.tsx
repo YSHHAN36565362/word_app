@@ -304,7 +304,7 @@ export default function ExamPage() {
               flipped={showAnswer}
               front={
                 <div className="text-center font-extrabold" style={{ fontSize: "calc(1.5rem * var(--exam-font-scale, 1))" }}>
-                  <Furigana text={qText} />
+                  <Furigana text={qText} enabled={false} />
                 </div>
               }
               back={

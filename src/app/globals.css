@@ -344,12 +344,31 @@ details[open] > summary .details-chevron {
   transform: translate(-50%, -100%);
   z-index: 200;
   pointer-events: none;
-  padding: 2px 8px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 10px;
+  max-width: min(360px, 90vw);
+  text-align: left;
   background: var(--text);
   color: var(--bg);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.furi-read {
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.furi-kanji {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.35;
+  opacity: 0.92;
+}
+.furi-kanji b {
+  font-size: 13px;
+}
+.furi-hangul {
+  font-weight: 700;
+}
+.furi-en {
+  opacity: 0.75;
 }
