@@ -226,8 +226,8 @@ export default function StudyPage() {
       KeyS: speakCurrent,
       n: skipToNextQuestion,
       KeyN: skipToNextQuestion,
-      k: () => { if (current) toggleFavorite(current); },
-      KeyK: () => { if (current) toggleFavorite(current); },
+      k: () => { if (words[index]) toggleFavorite(words[index]); },
+      KeyK: () => { if (words[index]) toggleFavorite(words[index]); },
     },
     focus && !done
   );
