@@ -2,6 +2,8 @@ export interface WordEntry {
   word: string;
   meaning: string;
   hint: string;
+  /** 파일 맨 위에 `#순서대로` 표시가 있으면 true — 섞지 않고 파일 순서대로 출제한다(면접 꼬리질문용). */
+  ordered?: boolean;
 }
 
 export interface FileRef {

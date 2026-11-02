@@ -30,7 +30,7 @@ import { useRoundSize } from "@/hooks/useRoundSize";
 import { useHintTheme } from "@/hooks/useHintTheme";
 import { DEFAULT_HINT_THEME } from "@/lib/hintTheme";
 import { fetchWords } from "@/lib/api";
-import { getDisplaySide, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, withoutKey, wordKey } from "@/lib/queue";
+import { getDisplaySide, isOrderedList, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, shuffleUnlessOrdered, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { getDeviceId, getDeviceLabel } from "@/lib/device";
 import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, resetWordMastery, saveWordMastery } from "@/lib/mastery";
@@ -342,8 +342,9 @@ function PracticePageInner() {
       }
     }
 
-    const shuffled = shuffle(due);
-    const pool = mastery.size > 0 ? prioritizeByMastery(shuffled, mastery) : shuffled;
+    const shuffled = shuffleUnlessOrdered(due);
+    // 순서 고정(면접 꼬리질문) 파일은 숙련도 우선순위로도 재배열하지 않는다.
+    const pool = mastery.size > 0 && !isOrderedList(due) ? prioritizeByMastery(shuffled, mastery) : shuffled;
     const q = [...pool];
     const first = q.shift() ?? null;
     const side = getDisplaySide(selectedMode);

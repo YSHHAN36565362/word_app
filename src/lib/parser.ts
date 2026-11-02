@@ -31,6 +31,13 @@ function splitBlocks(text: string): { blockStart: number; block: string[] }[] {
   return blocks;
 }
 
+// 파일 첫 블록이 "#순서대로" 한 줄이면 그 파일은 섞지 않고 순서대로 출제한다.
+// 한 줄짜리 블록이라 카드로는 읽히지 않으므로 기존 단어장 형식은 그대로 유지된다.
+const ORDER_DIRECTIVE = /^#\s*순서대로\s*$/;
+function hasOrderDirective(blocks: { block: string[] }[]): boolean {
+  return blocks.length > 0 && blocks[0].block.length === 1 && ORDER_DIRECTIVE.test(blocks[0].block[0]);
+}
+
 function blockToEntry(block: string[]): WordEntry | null {
   if (block[0].includes(":")) {
     const idx = block[0].indexOf(":");
@@ -57,9 +64,11 @@ function blockToEntry(block: string[]): WordEntry | null {
  */
 export function parseWordText(text: string): WordEntry[] {
   const parsed: WordEntry[] = [];
-  for (const { block } of splitBlocks(text)) {
+  const blocks = splitBlocks(text);
+  const ordered = hasOrderDirective(blocks);
+  for (const { block } of blocks) {
     const entry = blockToEntry(block);
-    if (entry) parsed.push(entry);
+    if (entry) parsed.push(ordered ? { ...entry, ordered: true } : entry);
   }
   return parsed;
 }
@@ -87,7 +96,10 @@ export function parseWordsWithValidation(text: string): ParseResult {
   const parsed: WordEntry[] = [];
   const errors: string[] = [];
 
-  for (const { blockStart, block } of splitBlocks(text)) {
+  const allBlocks = splitBlocks(text);
+  const ordered = hasOrderDirective(allBlocks);
+  for (const { blockStart, block } of allBlocks) {
+    if (ordered && blockStart === allBlocks[0].blockStart) continue; // "#순서대로" 표시 줄
     if (block[0].includes(":")) {
       const idx = block[0].indexOf(":");
       const word = block[0].slice(0, idx).trim();
@@ -95,7 +107,7 @@ export function parseWordsWithValidation(text: string): ParseResult {
       const hint = block.slice(1).join("\n");
       if (!word) errors.push(`${blockStart + 1}번 줄: 단어가 없습니다.`);
       else if (!meaning) errors.push(`${blockStart + 1}번 줄: 뜻이 없습니다.`);
-      else parsed.push({ word, meaning, hint });
+      else parsed.push(ordered ? { word, meaning, hint, ordered: true } : { word, meaning, hint });
     } else if (block.length === 1) {
       errors.push(`${blockStart + 1}번 줄: 뜻이 없는 단어입니다.`);
     } else {
@@ -104,7 +116,7 @@ export function parseWordsWithValidation(text: string): ParseResult {
       const hint = block.slice(2).join("\n");
       if (!word) errors.push(`${blockStart + 1}번 줄: 단어가 없습니다.`);
       else if (!meaning) errors.push(`${blockStart + 2}번 줄: 뜻이 없습니다.`);
-      else parsed.push({ word, meaning, hint });
+      else parsed.push(ordered ? { word, meaning, hint, ordered: true } : { word, meaning, hint });
     }
   }
 

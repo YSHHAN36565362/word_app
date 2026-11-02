@@ -21,7 +21,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { useFontScale } from "@/hooks/useFontScale";
 import { fetchWords } from "@/lib/api";
-import { shuffle, wordKey } from "@/lib/queue";
+import { shuffle, shuffleUnlessOrdered, wordKey } from "@/lib/queue";
 import { deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, removeFavorite } from "@/lib/favorites";
@@ -73,7 +73,7 @@ export default function StudyPage() {
     const list = await fetchWords(paths);
     setStarting(false);
     if (list.length === 0) return;
-    const pool = shuffle(list);
+    const pool = shuffleUnlessOrdered(list);
     setWords(pool);
     setIndex(0);
     setShowHint(false);

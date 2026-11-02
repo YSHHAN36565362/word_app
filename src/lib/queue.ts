@@ -98,6 +98,16 @@ export function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+/** 선택한 단어가 전부 `#순서대로` 파일의 것이면 true (섞지 않는다). 다른 파일이 하나라도 섞이면 false. */
+export function isOrderedList(list: WordEntry[]): boolean {
+  return list.length > 0 && list.every((w) => w.ordered);
+}
+
+/** 순서 고정 파일이면 그대로, 아니면 섞어서 돌려준다. */
+export function shuffleUnlessOrdered<T extends WordEntry>(list: T[]): T[] {
+  return isOrderedList(list) ? [...list] : shuffle(list);
+}
+
 export function wordKey(w: WordEntry): string {
   return `${w.word}|${w.meaning}|${w.hint}`;
 }
