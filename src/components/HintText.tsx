@@ -17,17 +17,14 @@ const KANJI_HEADER_TAG = /^\s*\[한자\d+\]/;
 
 /**
  * 예문 구간의 태그 없는 줄(= 일본어 문장·히라가나 독음)은 흐리게 가려 두고,
- * 마우스를 올리거나(PC) 탭하면(모바일) 보이게 해서 한국어 → 일본어 해석·읽기 연습에 쓴다.
+ * "문단"(보이지 않는 빈 줄이나 태그 줄로 나뉜 연속된 줄) 단위로 클릭할 때마다
+ * 블러를 켜고 끈다. 한국어 → 일본어 해석·읽기 연습에 쓴다.
  */
-function BlurLine({ text }: { text: string }) {
-  const [peek, setPeek] = useState(false);
-  const [pinned, setPinned] = useState(false);
-  const shown = peek || pinned;
+function BlurBlock({ lines }: { lines: string[] }) {
+  const [shown, setShown] = useState(false);
   return (
     <span
-      onMouseEnter={() => setPeek(true)}
-      onMouseLeave={() => setPeek(false)}
-      onClick={() => setPinned((v) => !v)}
+      onClick={() => setShown((v) => !v)}
       style={{
         display: "inline-block",
         cursor: "pointer",
@@ -36,7 +33,12 @@ function BlurLine({ text }: { text: string }) {
         userSelect: shown ? "auto" : "none",
       }}
     >
-      {text}
+      {lines.map((l, k) => (
+        <span key={k}>
+          {l}
+          {k < lines.length - 1 && <br />}
+        </span>
+      ))}
     </span>
   );
 }
@@ -51,11 +53,26 @@ export default function HintText({ text, theme: themeProp }: { text: string; the
 
   let section: HintSectionKey = "etc";
   const rendered: React.ReactNode[] = [];
+  let block: { start: number; lines: string[]; style: React.CSSProperties } | null = null;
+
+  const flushBlock = () => {
+    if (!block) return;
+    rendered.push(
+      <span key={`b${block.start}`} style={block.style}>
+        <BlurBlock lines={block.lines} />
+        <br />
+      </span>
+    );
+    block = null;
+  };
 
   lines.forEach((line, i) => {
     section = sectionOfLine(line, section);
     const style = theme[section];
-    if (!style.visible) return; // 숨긴 구간은 통째로 건너뛴다(이어지는 하위 줄 포함).
+    if (!style.visible) {
+      flushBlock();
+      return; // 숨긴 구간은 통째로 건너뛴다(이어지는 하위 줄 포함).
+    }
 
     const m = line.match(TAG_HEAD);
     // 한자1/한자2… 제목 줄은 요청에 따라 kanji 구간 본문과 다른 색으로 강조할 수 있다
@@ -67,6 +84,14 @@ export default function HintText({ text, theme: themeProp }: { text: string; the
       fontSize: headerStyle.scale !== 1 ? `${headerStyle.scale}em` : undefined,
     };
 
+    // 예문 구간의 태그 없는 일본어/독음 줄은 같은 문단끼리 한 덩어리로 모은다.
+    if (!m && section === "example" && line.replace(/\u200b/g, "").trim() !== "") {
+      if (!block) block = { start: i, lines: [], style: common };
+      block.lines.push(line);
+      return;
+    }
+    flushBlock();
+
     rendered.push(
       <span key={i} style={common}>
         {m ? (
@@ -74,8 +99,6 @@ export default function HintText({ text, theme: themeProp }: { text: string; the
             <b style={{ fontWeight: 800 }}>{m[1]}</b>
             {m[2]}
           </>
-        ) : section === "example" && line.replace(/\u200b/g, "").trim() !== "" ? (
-          <BlurLine text={line} />
         ) : (
           line
         )}
@@ -83,6 +106,7 @@ export default function HintText({ text, theme: themeProp }: { text: string; the
       </span>
     );
   });
+  flushBlock();
 
   return <>{rendered}</>;
 }
