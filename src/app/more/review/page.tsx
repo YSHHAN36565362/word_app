@@ -4,7 +4,7 @@ import Furigana from "@/components/Furigana";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUserId } from "@/hooks/useUserId";
-import { loadDueReviewWords, loadMasteredWords, MasteredWordEntry, resetWordMastery } from "@/lib/mastery";
+import { loadDueReviewWords, loadMasteredWords, markReviewDone, MasteredWordEntry, resetWordMastery } from "@/lib/mastery";
 import { wordKey } from "@/lib/queue";
 import PageHeader from "@/components/PageHeader";
 import HintText from "@/components/HintText";
@@ -43,6 +43,16 @@ export default function ReviewPage() {
     setResettingKey(wordKey(w));
     await resetWordMastery(userId, w);
     setWords((prev) => prev.filter((_, i) => i !== idx));
+    setResettingKey("");
+  }
+
+  // "복습 완료": 숙련도 점수는 그대로 두고 복습 목록·오늘의 복습에서만 뺀다.
+  async function completeReview(idx: number) {
+    const w = words[idx];
+    setResettingKey(wordKey(w));
+    await markReviewDone(userId, w);
+    setWords((prev) => prev.filter((_, i) => i !== idx));
+    loadDueReviewWords(userId).then((due) => setDueCount(due.length));
     setResettingKey("");
   }
 
@@ -123,8 +133,8 @@ export default function ReviewPage() {
             </Link>
           </div>
           <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-            다시 헷갈리는 단어는 초기화하면, 다음 연습에서 아직 안 본 단어처럼 다시
-            우선적으로 나옵니다.
+            다 외운 단어는 [복습 완료]로 목록에서 뺄 수 있어요(점수는 그대로 유지). 다시 헷갈리는
+            단어는 [초기화]하면, 다음 연습에서 아직 안 본 단어처럼 다시 우선적으로 나옵니다.
           </p>
 
           <div className="mt-4 flex flex-col gap-2">
@@ -150,13 +160,22 @@ export default function ReviewPage() {
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => reset(idx)}
-                    disabled={resettingKey === wordKey(w)}
-                    className="btn-3d btn-ghost shrink-0 px-3 py-1.5 text-xs"
-                  >
-                    {resettingKey === wordKey(w) ? "초기화 중..." : "초기화"}
-                  </button>
+                  <div className="flex shrink-0 flex-col gap-1.5">
+                    <button
+                      onClick={() => completeReview(idx)}
+                      disabled={resettingKey === wordKey(w)}
+                      className="btn-3d btn-accent px-3 py-1.5 text-xs"
+                    >
+                      복습 완료
+                    </button>
+                    <button
+                      onClick={() => reset(idx)}
+                      disabled={resettingKey === wordKey(w)}
+                      className="btn-3d btn-ghost px-3 py-1.5 text-xs"
+                    >
+                      {resettingKey === wordKey(w) ? "처리 중..." : "초기화"}
+                    </button>
+                  </div>
                 </div>
                 {w.hint.trim() && (
                   <div className="mt-2">

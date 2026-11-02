@@ -145,6 +145,31 @@ export async function saveWordMastery(userId: string, word: WordEntry, info: Mas
   return run;
 }
 
+/**
+ * "복습 완료" 표시: 다음 복습 예정일을 이 값(아주 먼 미래)으로 미룬다. 점수는 그대로 둬서 "안 본
+ * 단어"로 되돌아가지 않고, 복습 목록·오늘의 복습에서만 빠진다(새 컬럼 없이 기존 필드로 표현).
+ * 나중에 연습에서 그 단어를 다시 채점하면 복습일이 새로 계산돼 목록에 다시 나타난다.
+ */
+export const REVIEW_DONE_AT = "2099-12-31T00:00:00.000Z";
+
+export function isReviewDone(nextReviewAt: string | null | undefined): boolean {
+  return !!nextReviewAt && nextReviewAt >= REVIEW_DONE_AT;
+}
+
+/** 복습 화면에서 "복습 완료"를 누른 단어를 복습 목록에서 뺀다(숙련도 점수는 유지). */
+export async function markReviewDone(userId: string, word: WordEntry): Promise<void> {
+  if (!userId) return;
+  cache.delete(userId);
+  const supabase = await getSupabaseAsync();
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("word_mastery")
+    .update({ next_review_at: REVIEW_DONE_AT })
+    .eq("user_id", userId)
+    .eq("word_key", wordKey(word));
+  logSupabaseError("복습 완료 표시", error);
+}
+
 /** loadMasteredWords가 돌려주는 항목 — 복습 화면에서 "완벽"/"조금 앎" 배지와
  * 다음 복습 예정일을 보여주려면 원문 외에 채점 점수·SRS 상태도 함께 필요하다. */
 export interface MasteredWordEntry extends WordEntry {
@@ -171,7 +196,9 @@ export async function loadMasteredWords(userId: string, minScore = 60): Promise<
     .limit(500);
   logSupabaseError("복습 목록 불러오기", error);
   if (error || !data) return [];
-  return (data as { word: string; meaning: string; hint: string; score: number; next_review_at: string | null }[]).map((row) => ({
+  return (data as { word: string; meaning: string; hint: string; score: number; next_review_at: string | null }[])
+    .filter((row) => !isReviewDone(row.next_review_at)) // "복습 완료"로 뺀 단어는 목록에서 제외
+    .map((row) => ({
     word: row.word,
     meaning: row.meaning,
     hint: row.hint,
