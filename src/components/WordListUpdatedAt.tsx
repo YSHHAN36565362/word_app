@@ -22,7 +22,7 @@ function format(iso: string): string | null {
   return `${get("year")}.${get("month")}.${get("day")}.${get("hour")}.${get("minute")}`;
 }
 
-/** 모든 화면 오른쪽 위에 작게 보이는 "단어장 / 프로그램" 마지막 수정 시각. 라이트=검정, 다크=흰색. */
+/** 모든 화면 오른쪽 위에 작게 보이는 "최신 단어장 추가 일시 / 프로그램 기능 수정 일시". 라이트=검정, 다크=흰색. */
 export default function WordListUpdatedAt() {
   // 처음엔 빌드 때 계산한 값을 보여 주고, GitHub에서 가져온 최신 값이 오면 바꾼다.
   const [times, setTimes] = useState({ wordlist: BUILD_WORDLIST_AT, program: BUILD_PROGRAM_AT });
@@ -43,8 +43,8 @@ export default function WordListUpdatedAt() {
   const WORDLIST_AT = times.wordlist;
   const PROGRAM_AT = times.program;
   const rows = [
-    { label: "단어장", text: WORDLIST_AT ? format(WORDLIST_AT) : null },
-    { label: "프로그램", text: PROGRAM_AT ? format(PROGRAM_AT) : null },
+    { label: "최신 단어장 추가 일시", text: WORDLIST_AT ? format(WORDLIST_AT) : null },
+    { label: "프로그램 기능 수정 일시", text: PROGRAM_AT ? format(PROGRAM_AT) : null },
   ].filter((r): r is { label: string; text: string } => !!r.text);
   if (rows.length === 0) return null;
   return (
