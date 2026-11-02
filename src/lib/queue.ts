@@ -103,9 +103,35 @@ export function isOrderedList(list: WordEntry[]): boolean {
   return list.length > 0 && list.every((w) => w.ordered);
 }
 
-/** 순서 고정 파일이면 그대로, 아니면 섞어서 돌려준다. */
+/**
+ * 면접 카드 앞머리의 묶음 번호를 읽는다: "【9 질문】…"은 묶음 9의 첫 카드(tail 0),
+ * "【9-2 꼬리질문】…"은 묶음 9의 2번째 꼬리질문(tail 2). 표시가 없으면 null.
+ */
+export function chainOf(w: WordEntry): { chain: number; tail: number } | null {
+  const m = w.word.match(/^【(\d+)(?:-(\d+))?\s*(?:질문|꼬리질문)】/);
+  if (!m) return null;
+  return { chain: Number(m[1]), tail: m[2] ? Number(m[2]) : 0 };
+}
+
+/**
+ * 순서 고정(면접) 파일용 섞기: 질문 묶음(9, 9-1, 9-2 …)은 번호 순서를 그대로 두고,
+ * 묶음끼리만 랜덤으로 섞는다. 묶음 표시가 없는 카드는 혼자 한 묶음으로 친다.
+ */
+export function chainShuffle<T extends WordEntry>(list: T[]): T[] {
+  const groups: T[][] = [];
+  for (const w of list) {
+    const c = chainOf(w);
+    const last = groups[groups.length - 1];
+    const lastChain = last ? chainOf(last[0]) : null;
+    if (c && c.tail > 0 && lastChain && lastChain.chain === c.chain) last.push(w);
+    else groups.push([w]);
+  }
+  return shuffle(groups).flat();
+}
+
+/** 순서 고정 파일이면 묶음 단위로만 섞고, 아니면 전체를 섞어서 돌려준다. */
 export function shuffleUnlessOrdered<T extends WordEntry>(list: T[]): T[] {
-  return isOrderedList(list) ? [...list] : shuffle(list);
+  return isOrderedList(list) ? chainShuffle(list) : shuffle(list);
 }
 
 export function wordKey(w: WordEntry): string {

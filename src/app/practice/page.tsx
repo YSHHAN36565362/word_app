@@ -30,7 +30,7 @@ import { useRoundSize } from "@/hooks/useRoundSize";
 import { useHintTheme } from "@/hooks/useHintTheme";
 import { DEFAULT_HINT_THEME } from "@/lib/hintTheme";
 import { fetchWords } from "@/lib/api";
-import { getDisplaySide, isOrderedList, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, shuffleUnlessOrdered, withoutKey, wordKey } from "@/lib/queue";
+import { chainOf, getDisplaySide, isOrderedList, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, shuffleUnlessOrdered, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { getDeviceId, getDeviceLabel } from "@/lib/device";
 import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, resetWordMastery, saveWordMastery } from "@/lib/mastery";
@@ -510,6 +510,37 @@ function PracticePageInner() {
     });
   }
 
+  // 면접(순서 고정) 파일에서 "다음 질문으로 넘어가기": 지금 묶음의 남은 꼬리질문을 건너뛰고
+  // 다음 묶음(랜덤으로 정해진 다음 [질문])으로 바로 간다. 채점하지 않고 넘어가므로 지금 카드와
+  // 건너뛴 카드는 이번 세션 총 개수에서 뺀다(숙련도 기록은 건드리지 않는다).
+  function skipToNextQuestion() {
+    if (!current) return;
+    const c = chainOf(current);
+    const nextQueue = [...queue];
+    let dropped = 1;
+    if (c) {
+      while (nextQueue.length > 0) {
+        const x = chainOf(nextQueue[0]);
+        if (x && x.chain === c.chain && x.tail > c.tail) {
+          nextQueue.shift();
+          dropped += 1;
+        } else break;
+      }
+    }
+    const nextCurrent = nextQueue.length > 0 ? nextQueue.shift()! : null;
+    const nextTotal = Math.max(1, doneCount, total - dropped);
+    const nextSide = getDisplaySide(mode);
+    setQueue(nextQueue);
+    setCurrent(nextCurrent);
+    setTotal(nextTotal);
+    setDisplaySide(nextSide);
+    setShowAnswer(false);
+    setShowHint(false);
+    setTurnId((t) => t + 1);
+    setLastUndo(null);
+    persist({ queue: nextQueue, current: nextCurrent, total: nextTotal, done: doneCount, round: roundCount, side: nextSide, m: mode, labels: filesLabel, paths: activeFilePaths });
+  }
+
   function revealAnswer() {
     setShowAnswer(true);
     if (current?.hint.trim()) setShowHint(true);
@@ -634,6 +665,8 @@ function PracticePageInner() {
   }
 
   const finished = focus && current === null && queue.length === 0 && total > 0;
+  // 지금 보고 있는 카드와 남은 큐가 전부 `#순서대로`(면접) 파일 것이면 순서 고정 모드.
+  const orderedMode = current !== null && isOrderedList([current, ...queue]);
 
   // 요약 화면의 소요 시간은 "끝난 순간"에 한 번만 재서 고정한다(렌더 중 Date.now() 금지).
   useEffect(() => {
@@ -691,8 +724,19 @@ function PracticePageInner() {
       Numpad6: () => { if (showAnswer) score(40); },
       c: () => setScoreBtnsHidden(!scoreBtnsHidden),
       KeyC: () => setScoreBtnsHidden(!scoreBtnsHidden),
+      n: () => { if (orderedMode) skipToNextQuestion(); },
+      KeyN: () => { if (orderedMode) skipToNextQuestion(); },
     },
     focus && !finished && current !== null && !roundGateOpen
+  );
+
+  // 라운드 완료 화면: 마우스 대신 Space/Enter로 다음 라운드를 이어서 한다.
+  useKeyboardShortcuts(
+    {
+      " ": () => setRoundGateOpen(false),
+      Enter: () => setRoundGateOpen(false),
+    },
+    focus && !finished && current !== null && roundGateOpen
   );
       //Numpad8: () => { if (showAnswer) score(100); },
       //Numpad2: () => { if (showAnswer) score(0); },
@@ -860,6 +904,7 @@ function PracticePageInner() {
             </div>
             <button onClick={() => setRoundGateOpen(false)} className="btn-3d btn-accent mt-4 w-full">
               다음 라운드 계속하기
+              <KeyBadge>Space</KeyBadge>
             </button>
           </div>
         ) : !finished && current ? (
@@ -943,7 +988,11 @@ function PracticePageInner() {
           label="연습 종료하기"
           extraAction={[
             ...(lastUndo ? [{ label: "되돌리기", onClick: undoLastScore }] : []),
-            ...(!finished && !roundGateOpen && queue.length > 1 ? [{ label: "단어 순서 섞기", onClick: shuffleQueue }] : []),
+            ...(!finished && !roundGateOpen && orderedMode
+              ? [{ label: "다음 질문으로 넘어가기 [N]", onClick: skipToNextQuestion }]
+              : !finished && !roundGateOpen && queue.length > 1
+                ? [{ label: "단어 순서 섞기", onClick: shuffleQueue }]
+                : []),
           ]}
         />
       </FocusScreen>
