@@ -12,6 +12,7 @@ import KeyBadge from "@/components/KeyBadge";
 import Mascot, { MascotState } from "@/components/Mascot";
 import Spinner from "@/components/Spinner";
 import SessionInfoPanel from "@/components/SessionInfoPanel";
+import SavedProgressManager from "@/components/SavedProgressManager";
 import PageHeader from "@/components/PageHeader";
 import Confetti from "@/components/Confetti";
 import FeedbackFlash from "@/components/FeedbackFlash";
@@ -1180,6 +1181,16 @@ function PracticePageInner() {
           </button>
         </div>
       )}
+
+      <SavedProgressManager
+        userId={userId}
+        ready={ready}
+        part="practice"
+        onDeleted={(deleted) => {
+          const gone = new Set(deleted.map((d) => `${d.fileKey}::${d.deviceId}`));
+          setSavedList((prev) => prev.filter((e) => !gone.has(`${e.fileKey}::${e.deviceId}`)));
+        }}
+      />
 
       <div className="mt-5">
         <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restoreRequest?.paths ?? null} />

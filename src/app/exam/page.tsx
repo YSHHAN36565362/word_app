@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import FileSelector from "@/components/FileSelector";
+import SavedProgressManager from "@/components/SavedProgressManager";
 import ExitFocusButton from "@/components/ExitFocusButton";
 import FocusScreen from "@/components/FocusScreen";
 import ProgressBar from "@/components/ProgressBar";
@@ -400,6 +401,16 @@ export default function ExamPage() {
           </button>
         </div>
       )}
+
+      <SavedProgressManager
+        userId={userId}
+        ready={ready}
+        part="exam"
+        onDeleted={(deleted) => {
+          // 시험은 진행 기록이 하나뿐이라, 이 기기 기록이 지워졌으면 "이어서 하기"도 내린다.
+          if (deleted.some((d) => d.fileKey === "" && d.isThisDevice)) setSaved(null);
+        }}
+      />
 
       <div className="mt-5">
         <FileSelector onSelectionChange={setSelectedFiles} />

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import FileSelector from "@/components/FileSelector";
+import SavedProgressManager from "@/components/SavedProgressManager";
 import ExitFocusButton from "@/components/ExitFocusButton";
 import FocusScreen from "@/components/FocusScreen";
 import ProgressBar from "@/components/ProgressBar";
@@ -170,6 +171,15 @@ export default function ScriptPage() {
           </button>
         </div>
       )}
+
+      <SavedProgressManager
+        userId={userId}
+        ready={ready}
+        part="script"
+        onDeleted={(deleted) => {
+          if (deleted.some((d) => d.fileKey === "" && d.isThisDevice)) setSaved(null);
+        }}
+      />
 
       <div className="mt-5">
         <FileSelector onSelectionChange={setSelectedFiles} />
