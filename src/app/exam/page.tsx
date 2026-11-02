@@ -1,5 +1,6 @@
 "use client";
 
+import Furigana from "@/components/Furigana";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import FileSelector from "@/components/FileSelector";
@@ -303,7 +304,7 @@ export default function ExamPage() {
               flipped={showAnswer}
               front={
                 <div className="text-center font-extrabold" style={{ fontSize: "calc(1.5rem * var(--exam-font-scale, 1))" }}>
-                  {qText}
+                  <Furigana text={qText} />
                 </div>
               }
               back={
@@ -312,13 +313,13 @@ export default function ExamPage() {
                     className="text-center font-bold"
                     style={{ color: "var(--text-muted)", fontSize: "calc(1.125rem * var(--exam-font-scale, 1))" }}
                   >
-                    {qText}
+                    <Furigana text={qText} />
                   </div>
                   <div
                     className="text-center font-extrabold"
                     style={{ color: "var(--accent-dark)", fontSize: "calc(1.5rem * var(--exam-font-scale, 1))" }}
                   >
-                    {aText}
+                    <Furigana text={aText} />
                   </div>
                   {current.hint.trim() && (
                     <div

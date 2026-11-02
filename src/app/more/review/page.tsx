@@ -1,5 +1,6 @@
 "use client";
 
+import Furigana from "@/components/Furigana";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUserId } from "@/hooks/useUserId";
@@ -138,10 +139,10 @@ export default function ReviewPage() {
                       >
                         {reviewBadge(w).label}
                       </span>
-                      <div className="font-extrabold truncate">{w.word}</div>
+                      <div className="font-extrabold truncate"><Furigana text={w.word} /></div>
                     </div>
                     <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-                      {w.meaning}
+                      <Furigana text={w.meaning} />
                     </div>
                     {nextReviewLabel(w) && (
                       <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>

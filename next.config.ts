@@ -61,6 +61,8 @@ const nextConfig: NextConfig = {
   // 정상 동작하다가 배포본에서만 "파일을 찾을 수 없음"으로 실패한다.
   outputFileTracingIncludes: {
     "/api/wordlist/**": ["./word_list/**/*"],
+    // 한자 읽기(kuromoji) 사전도 런타임에 파일로 읽으므로 같은 이유로 명시한다.
+    "/api/furigana": ["./node_modules/kuromoji/dict/**/*"],
   },
 };
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Furigana from "@/components/Furigana";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -927,7 +928,7 @@ function PracticePageInner() {
                   className="text-center font-extrabold"
                   style={{ fontSize: "calc(1.5rem * var(--practice-font-scale, 1))", whiteSpace: current?.ordered ? "pre-line" : undefined }}
                 >
-                  {current?.ordered ? formatInterviewFront(qText) : qText}
+                  <Furigana text={current?.ordered ? formatInterviewFront(qText) : qText} />
                 </div>
               }
               back={
@@ -944,13 +945,13 @@ function PracticePageInner() {
                     className="text-center font-bold"
                     style={{ color: "var(--text-muted)", fontSize: "calc(1.125rem * var(--practice-font-scale, 1))" }}
                   >
-                    {qText}
+                    <Furigana text={qText} />
                   </div>
                   <div
                     className="text-center font-extrabold"
                     style={{ color: "var(--accent-dark)", fontSize: "calc(1.5rem * var(--practice-font-scale, 1))" }}
                   >
-                    {aText}
+                    <Furigana text={aText} />
                   </div>
                   {showHint && current.hint.trim() && (
                     <div

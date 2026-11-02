@@ -1,5 +1,6 @@
 "use client";
 
+import Furigana from "@/components/Furigana";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUserId } from "@/hooks/useUserId";
@@ -93,9 +94,9 @@ export default function WrongNotesPage() {
               <div key={`${w.word}-${idx}`} className="study-card p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-extrabold truncate">{w.word}</div>
+                    <div className="font-extrabold truncate"><Furigana text={w.word} /></div>
                     <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-                      {w.meaning}
+                      <Furigana text={w.meaning} />
                     </div>
                   </div>
                   <button onClick={() => markDone(idx)} className="btn-3d btn-accent shrink-0 px-3 py-1.5 text-xs">

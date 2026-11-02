@@ -1,5 +1,6 @@
 "use client";
 
+import Furigana from "@/components/Furigana";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -283,7 +284,7 @@ export default function StudyPage() {
                   className="text-center font-extrabold"
                   style={{ color: "var(--blue)", fontSize: "calc(1.5rem * var(--study-font-scale, 1))", whiteSpace: current.ordered ? "pre-line" : undefined }}
                 >
-                  {current.ordered ? formatInterviewFront(current.word) : current.word}
+                  <Furigana text={current.ordered ? formatInterviewFront(current.word) : current.word} />
                 </div>
                 <SpeakButton text={current.word} compact />
                 <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
@@ -291,7 +292,7 @@ export default function StudyPage() {
                 </button>
               </div>
               <div className="text-center font-semibold" style={{ fontSize: "calc(1.125rem * var(--study-font-scale, 1))" }}>
-                {current.meaning}
+                <Furigana text={current.meaning} />
               </div>
               {showHint && current.hint.trim() && (
                 <div

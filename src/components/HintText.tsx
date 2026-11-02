@@ -1,5 +1,6 @@
 "use client";
 
+import Furigana from "@/components/Furigana";
 import { useState } from "react";
 import { HintSectionKey, HintTheme, sectionOfLine } from "@/lib/hintTheme";
 import { useHintTheme } from "@/hooks/useHintTheme";
@@ -35,7 +36,7 @@ function BlurBlock({ lines }: { lines: string[] }) {
     >
       {lines.map((l, k) => (
         <span key={k}>
-          {l}
+          <Furigana text={l} enabled={shown} />
           {k < lines.length - 1 && <br />}
         </span>
       ))}
@@ -97,10 +98,10 @@ export default function HintText({ text, theme: themeProp }: { text: string; the
         {m ? (
           <>
             <b style={{ fontWeight: 800 }}>{m[1]}</b>
-            {m[2]}
+            <Furigana text={m[2]} />
           </>
         ) : (
-          line
+          <Furigana text={line} />
         )}
         <br />
       </span>
