@@ -129,6 +129,24 @@ export function chainShuffle<T extends WordEntry>(list: T[]): T[] {
   return shuffle(groups).flat();
 }
 
+/** 면접 카드 앞면이 한 줄로 너무 길어서, 화면에서만 질문/답변을 나누고 문장마다 줄을 바꿔 보여준다. */
+export function formatInterviewFront(text: string): string {
+  return text.replace(/\s*【답변】\s*/, "\n\n【답변】\n").replace(/([.?!])\s+(?=\S)/g, "$1\n");
+}
+
+/** list[index]가 속한 질문 묶음(대 질문 + 꼬리질문들)이 끝나는 다음 위치를 돌려준다. */
+export function chainBlockEnd(list: WordEntry[], index: number): number {
+  const c = list[index] ? chainOf(list[index]) : null;
+  if (!c) return index + 1;
+  let i = index + 1;
+  while (i < list.length) {
+    const x = chainOf(list[i]);
+    if (x && x.chain === c.chain && x.tail > c.tail) i += 1;
+    else break;
+  }
+  return i;
+}
+
 /** 순서 고정 파일이면 묶음 단위로만 섞고, 아니면 전체를 섞어서 돌려준다. */
 export function shuffleUnlessOrdered<T extends WordEntry>(list: T[]): T[] {
   return isOrderedList(list) ? chainShuffle(list) : shuffle(list);

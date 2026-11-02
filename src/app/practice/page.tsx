@@ -30,7 +30,7 @@ import { useRoundSize } from "@/hooks/useRoundSize";
 import { useHintTheme } from "@/hooks/useHintTheme";
 import { DEFAULT_HINT_THEME } from "@/lib/hintTheme";
 import { fetchWords } from "@/lib/api";
-import { chainOf, getDisplaySide, isOrderedList, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, shuffleUnlessOrdered, withoutKey, wordKey } from "@/lib/queue";
+import { chainOf, formatInterviewFront, getDisplaySide, isOrderedList, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, shuffleUnlessOrdered, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { getDeviceId, getDeviceLabel } from "@/lib/device";
 import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, resetWordMastery, saveWordMastery } from "@/lib/mastery";
@@ -922,8 +922,11 @@ function PracticePageInner() {
               key={turnId}
               flipped={showAnswer}
               front={
-                <div className="text-center font-extrabold" style={{ fontSize: "calc(1.5rem * var(--practice-font-scale, 1))" }}>
-                  {qText}
+                <div
+                  className="text-center font-extrabold"
+                  style={{ fontSize: "calc(1.5rem * var(--practice-font-scale, 1))", whiteSpace: current?.ordered ? "pre-line" : undefined }}
+                >
+                  {current?.ordered ? formatInterviewFront(qText) : qText}
                 </div>
               }
               back={

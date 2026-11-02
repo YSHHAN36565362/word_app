@@ -304,3 +304,32 @@ details[open] > summary .details-chevron {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ---------- 컴퓨터(마우스) 전용: 박스 크기 조절 ---------- */
+.focus-resize-handle {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .focus-resize-handle {
+    display: block;
+    position: absolute;
+    top: 80px;
+    bottom: 160px;
+    right: -6px;
+    width: 12px;
+    cursor: ew-resize;
+    z-index: 30;
+    border-radius: 6px;
+    touch-action: none;
+  }
+  .focus-resize-handle:hover {
+    background: var(--card-border);
+  }
+  /* 힌트 상자: 오른쪽 아래 모서리를 끌어 높이를 조절한다(기본 상한은 화면의 75%). */
+  .hint-reveal {
+    max-height: 75vh !important;
+    min-height: 6rem;
+    resize: vertical;
+    overflow-y: auto;
+  }
+}

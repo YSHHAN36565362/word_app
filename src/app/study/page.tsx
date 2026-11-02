@@ -21,7 +21,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useUserId } from "@/hooks/useUserId";
 import { useFontScale } from "@/hooks/useFontScale";
 import { fetchWords } from "@/lib/api";
-import { shuffle, shuffleUnlessOrdered, wordKey } from "@/lib/queue";
+import { chainBlockEnd, chainShuffle, formatInterviewFront, isOrderedList, shuffle, shuffleUnlessOrdered, wordKey } from "@/lib/queue";
 import { deleteProgress, loadProgress, saveProgress } from "@/lib/progress";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { addFavorite, loadFavoriteKeys, removeFavorite } from "@/lib/favorites";
@@ -127,7 +127,9 @@ export default function StudyPage() {
   // 외워버릴 수 있어서, 진행 중에도 원하면 순서를 바꿀 수 있게 한다.
   function shuffleRemaining() {
     setWords((prev) => {
-      const next = [...prev.slice(0, index), ...shuffle(prev.slice(index))];
+      // 면접(순서 고정) 파일은 지금 보던 질문 묶음은 그대로 두고, 그 뒤의 "대 질문"들만 묶음째 섞는다.
+      const end = isOrderedList(prev) ? chainBlockEnd(prev, index) : -1;
+      const next = end >= 0 ? [...prev.slice(0, end), ...chainShuffle(prev.slice(end))] : [...prev.slice(0, index), ...shuffle(prev.slice(index))];
       if (userId && activeFilePaths.length > 0) {
         saveProgress(userId, "study", {
           words: next,
@@ -158,6 +160,13 @@ export default function StudyPage() {
 
   function next() {
     goTo(index + 1);
+  }
+
+  // 면접(순서 고정) 파일: 지금 질문의 남은 꼬리질문을 건너뛰고 다음 대 질문으로 간다.
+  const orderedMode = isOrderedList(words);
+  function skipToNextQuestion() {
+    if (!orderedMode || index >= words.length) return;
+    goTo(chainBlockEnd(words, index));
   }
 
   function prev() {
@@ -209,6 +218,8 @@ export default function StudyPage() {
       " ": revealHint,
       s: speakCurrent,
       KeyS: speakCurrent,
+      n: skipToNextQuestion,
+      KeyN: skipToNextQuestion,
     },
     focus && !done
   );
@@ -263,8 +274,11 @@ export default function StudyPage() {
             </div>
             <div className="study-card mt-1.5 p-8 flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
-                <div className="text-center font-extrabold" style={{ color: "var(--blue)", fontSize: "calc(1.5rem * var(--study-font-scale, 1))" }}>
-                  {current.word}
+                <div
+                  className="text-center font-extrabold"
+                  style={{ color: "var(--blue)", fontSize: "calc(1.5rem * var(--study-font-scale, 1))", whiteSpace: current.ordered ? "pre-line" : undefined }}
+                >
+                  {current.ordered ? formatInterviewFront(current.word) : current.word}
                 </div>
                 <SpeakButton text={current.word} compact />
                 <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
@@ -321,7 +335,10 @@ export default function StudyPage() {
             }
           }}
           label="학습 종료하기"
-          extraAction={!done && words.length > 1 ? { label: "단어 순서 섞기", onClick: shuffleRemaining } : undefined}
+          extraAction={[
+            ...(!done && orderedMode ? [{ label: "다음 질문으로 넘어가기 [N]", onClick: skipToNextQuestion }] : []),
+            ...(!done && words.length > 1 ? [{ label: "단어 순서 섞기", onClick: shuffleRemaining }] : []),
+          ]}
         />
       </FocusScreen>
     );
