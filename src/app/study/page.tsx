@@ -1,6 +1,7 @@
 "use client";
 
 import Furigana from "@/components/Furigana";
+import HintFontControl from "@/components/HintFontControl";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -26,6 +27,7 @@ import { fetchWords } from "@/lib/api";
 import { chainBlockEnd, chainShuffle, formatInterviewFront, isOrderedList, shuffle, shuffleUnlessOrdered, wordKey } from "@/lib/queue";
 import { deleteProgress, listSavedProgress, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
+import { clearShareUrl, readShareUrl, writeShareUrl } from "@/lib/shareLink";
 import { addFavorite, loadFavoriteKeys, removeFavorite } from "@/lib/favorites";
 import { FileRef, StudyProgress, WordEntry } from "@/lib/types";
 
@@ -83,6 +85,7 @@ export default function StudyPage() {
     setActiveFilePaths(paths);
     setActiveFileLabels(labels);
     setFocus(true);
+    writeShareUrl(paths); // 이 주소를 보내면 상대도 같은 단어장으로 시작한다
     if (userId) {
       saveProgress(userId, "study", {
         words: pool,
@@ -103,6 +106,7 @@ export default function StudyPage() {
     setActiveFilePaths(p.filePaths);
     setActiveFileLabels(p.filesLabel);
     setFocus(true);
+    writeShareUrl(p.filePaths);
   }
 
   // 복원 요청이 들어오면, FileSelector가 그 파일들을 실제 체크박스 선택(selectedFiles)으로
@@ -111,6 +115,14 @@ export default function StudyPage() {
   // 파일 조합으로 맞춰서 "진행 상황이 저장됐다"는 게 바로 보이게만 한다.
   // (기록에 있던 파일이 GitHub에서 지워졌다면 완전히 같은 조합이 되지 않을 수 있어
   // fileKey가 정확히 일치할 때만 처리한다 — 엉뚱한 파일로 잘못 시작하지 않기 위함.)
+  // 받은 링크(?files=...)에 단어장이 담겨 있으면 그 파일을 선택하고 바로 학습을 시작한다.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const shared = readShareUrl();
+    if (shared) setRestoreRequest({ paths: shared.paths, autoStart: true });
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!restoreRequest || selectedFiles.length === 0) return;
@@ -298,11 +310,14 @@ export default function StudyPage() {
                 <Furigana text={current.meaning} />
               </div>
               {showHint && current.hint.trim() && (
-                <div
-                  className="hint-reveal w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 leading-relaxed whitespace-pre-line"
-                  style={{ background: "var(--hint-bg)", color: "var(--text-muted)", fontSize: "calc(0.875rem * var(--study-font-scale, 1))" }}
-                >
-                  <HintText text={current.hint} />
+                <div className="w-full">
+                  <HintFontControl />
+                  <div
+                    className="hint-reveal mt-1.5 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 leading-relaxed whitespace-pre-line"
+                    style={{ background: "var(--hint-bg)", color: "var(--text-muted)", fontSize: "calc(0.875rem * var(--study-font-scale, 1) * var(--hint-font-scale, 1))" }}
+                  >
+                    <HintText text={current.hint} />
+                  </div>
                 </div>
               )}
             </div>
@@ -322,6 +337,7 @@ export default function StudyPage() {
         )}
         <ExitFocusButton
           onExit={() => {
+            clearShareUrl();
             // 종료 직후 방금 학습한 파일 조합으로 체크박스/대시보드를 다시 맞춰서,
             // 방금 한 학습이 저장됐다는 걸 화면에서 바로 확인할 수 있게 한다.
             // selectedFiles를 먼저 비워야 한다 — 그대로 두면 포커스 모드 동안 언마운트됐던

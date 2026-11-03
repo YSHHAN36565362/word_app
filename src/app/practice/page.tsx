@@ -1,6 +1,8 @@
 "use client";
 
 import Furigana from "@/components/Furigana";
+import { clearShareUrl, readShareUrl, writeShareUrl } from "@/lib/shareLink";
+import HintFontControl from "@/components/HintFontControl";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -125,6 +127,8 @@ function PracticePageInner() {
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
   const [starting, setStarting] = useState(false);
+  // 켜면 섞지 않고 단어장 파일 순서 그대로 연습한다(면접 질문을 원하는 순서로 찾아볼 때).
+  const [sequential, setSequential] = useState(false);
   // 완전히 끝내지 않고 나간 큐/완료 개수를 그대로 이어서 볼 수 있게 파일 조합별로
   // 전부 저장해둔다(progress 테이블이 (user, part, file_key)별로 한 슬롯씩 가짐).
   // 예전엔 파트당 슬롯이 하나뿐이라 다른 조합을 새로 시작하면 이전 진행이 사라진
@@ -323,14 +327,15 @@ function PracticePageInner() {
     selectedMode: StudyMode,
     labels: string[],
     paths: string[],
-    applyDueFilter = false
+    applyDueFilter = false,
+    inOrder = false
   ) {
     if (list.length === 0) return;
     setNothingDueMessage(null);
     setDueFilterNotice(null);
 
     let due = list;
-    if (applyDueFilter && mastery.size > 0) {
+    if (applyDueFilter && !inOrder && mastery.size > 0) {
       const split = excludeNotDue(list, mastery);
       due = split.due;
       if (due.length === 0) {
@@ -344,9 +349,10 @@ function PracticePageInner() {
       }
     }
 
-    const shuffled = shuffleUnlessOrdered(due);
+    // "순서대로 연습"이면 섞지도, 숙련도 우선순위로 재배열하지도 않고 파일 순서 그대로 쓴다.
+    const shuffled = inOrder ? [...due] : shuffleUnlessOrdered(due);
     // 순서 고정(면접 꼬리질문) 파일은 숙련도 우선순위로도 재배열하지 않는다.
-    const pool = mastery.size > 0 && !isOrderedList(due) ? prioritizeByMastery(shuffled, mastery) : shuffled;
+    const pool = !inOrder && mastery.size > 0 && !isOrderedList(due) ? prioritizeByMastery(shuffled, mastery) : shuffled;
     const q = [...pool];
     const first = q.shift() ?? null;
     const side = getDisplaySide(selectedMode);
@@ -371,6 +377,7 @@ function PracticePageInner() {
     setFinishedAt(null);
     setLastUndo(null);
     setFocus(true);
+    writeShareUrl(paths, { mode: selectedMode, sequential: inOrder }); // 이 주소를 보내면 상대도 같은 단어장으로 시작한다
 
     persist({ queue: q, current: first, total: pool.length, done: 0, round: 0, side, m: selectedMode, labels, paths });
   }
@@ -381,7 +388,8 @@ function PracticePageInner() {
     // 이전과 정확히 같은 파일 조합이면, 새로 섞어 시작하는 대신 저장해둔 지점 그대로
     // 이어간다 — "이전과 같은 단어장 목록을 누르면 자동으로 이어서" 되길 원한다는
     // 요청에 따른 것.
-    const existing = savedList.find((e) => e.fileKey === fileKeyOf(paths));
+    // (순서대로 연습을 켠 경우는 저장된 섞인 큐 대신 새로 순서대로 시작한다.)
+    const existing = sequential ? undefined : savedList.find((e) => e.fileKey === fileKeyOf(paths));
     if (existing) {
       resume(existing.data);
       return;
@@ -395,7 +403,7 @@ function PracticePageInner() {
       fetchWords(paths),
       userId ? loadAllMastery(userId) : Promise.resolve(new Map<string, MasteryInfo>()),
     ]);
-    startWithList(list, mastery, selectedMode, labels, paths, true);
+    startWithList(list, mastery, selectedMode, labels, paths, true, sequential);
     setStarting(false);
   }
 
@@ -425,6 +433,7 @@ function PracticePageInner() {
     setFinishedAt(null);
     setLastUndo(null);
     setFocus(true);
+    writeShareUrl(saved.filePaths, { mode: saved.mode });
   }
 
   // "이어서 연습하기" 카드를 시작 화면에서 바로 지운다 — 0개짜리 등 필요 없는
@@ -451,6 +460,17 @@ function PracticePageInner() {
   // 대시보드만 방금 연습한 파일 조합으로 맞춰서 "진행 상황이 저장됐다"는 게 바로
   // 보이게만 한다. (기록에 있던 파일이 GitHub에서 지워졌다면 완전히 같은 조합이 되지
   // 않을 수 있어 fileKey가 정확히 일치할 때만 처리한다.)
+  // 받은 링크(?files=...&mode=...&order=seq)에 단어장이 담겨 있으면 그 파일을 선택하고 바로 시작한다.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const shared = readShareUrl();
+    if (!shared) return;
+    const sharedMode = (["word_only", "meaning_only", "random"] as const).find((m) => m === shared.mode) ?? "random";
+    if (shared.sequential) setSequential(true);
+    setRestoreRequest({ paths: shared.paths, mode: sharedMode, autoStart: true });
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!restoreRequest || selectedFiles.length === 0) return;
@@ -957,11 +977,14 @@ function PracticePageInner() {
                     <Furigana text={aText} />
                   </div>
                   {showHint && current.hint.trim() && (
-                    <div
-                      className="hint-reveal mt-2 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 leading-relaxed whitespace-pre-line"
-                      style={{ background: "var(--hint-bg)", color: "var(--text-muted)", fontSize: "calc(0.875rem * var(--practice-font-scale, 1))" }}
-                    >
-                      <HintText text={current.hint} theme={hintTheme} />
+                    <div className="w-full">
+                      <HintFontControl />
+                      <div
+                        className="hint-reveal mt-1.5 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 leading-relaxed whitespace-pre-line"
+                        style={{ background: "var(--hint-bg)", color: "var(--text-muted)", fontSize: "calc(0.875rem * var(--practice-font-scale, 1) * var(--hint-font-scale, 1))" }}
+                      >
+                        <HintText text={current.hint} theme={hintTheme} />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -978,6 +1001,7 @@ function PracticePageInner() {
         )}
         <ExitFocusButton
           onExit={() => {
+            clearShareUrl();
             // 종료 직후 방금 연습한 파일 조합으로 체크박스/대시보드를 다시 맞춰서,
             // 방금 한 연습이 저장됐다는 걸 화면에서 바로 확인할 수 있게 한다.
             // selectedFiles를 먼저 비워야 한다 — 그대로 두면 포커스 모드 동안 언마운트됐던
@@ -1200,7 +1224,12 @@ function PracticePageInner() {
         <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restoreRequest?.paths ?? null} />
       </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-2">
+      <label className="mt-5 flex cursor-pointer items-center gap-2 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+        <input type="checkbox" checked={sequential} onChange={(e) => setSequential(e.target.checked)} />
+        순서대로 연습 (섞지 않고 단어장 순서 그대로 — 면접 질문을 찾아볼 때)
+      </label>
+
+      <div className="mt-2 grid grid-cols-3 gap-2">
         <button onClick={() => begin("word_only")} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent text-sm">
           {starting ? <Spinner size={14} /> : isItSelection(selectedFiles) ? "이름만" : "한자 맞추기"}
         </button>

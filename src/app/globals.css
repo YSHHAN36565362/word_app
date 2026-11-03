@@ -341,12 +341,12 @@ details[open] > summary .details-chevron {
 }
 .furi-tip {
   position: fixed;
-  transform: translate(-50%, -100%);
   z-index: 200;
   pointer-events: none;
   padding: 6px 10px;
   border-radius: 10px;
-  max-width: min(360px, 90vw);
+  width: max-content;
+  max-width: min(340px, calc(100vw - 16px));
   text-align: left;
   background: var(--text);
   color: var(--bg);
@@ -355,7 +355,7 @@ details[open] > summary .details-chevron {
 .furi-read {
   font-size: 15px;
   font-weight: 800;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .furi-kanji {
   margin-top: 3px;
