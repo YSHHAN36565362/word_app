@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { plainFront } from "@/lib/queue";
 
 interface KanjiInfo {
   c: string;
@@ -78,7 +79,9 @@ function load(text: string): Promise<Tok[] | null> {
  * - 한자를 탭할 때는 이벤트가 바깥(블러 토글 등)으로 번지지 않게 막는다 — 휴대폰에서 한자를 눌렀는데
  *   블러만 다시 켜지는 문제를 막기 위함이다. 툴팁은 화면 안에 들어오도록 위치를 보정한다.
  */
-export default function Furigana({ text, enabled = true }: { text: string; enabled?: boolean }) {
+export default function Furigana({ text: rawText, enabled = true }: { text: string; enabled?: boolean }) {
+  // 면접 카드의 【키워드】 칸·{번호|…} 표시는 목록 등 다른 화면에서는 걷어 내고 보통 글로 보여준다.
+  const text = plainFront(rawText);
   const [loaded, setLoaded] = useState<{ text: string; toks: Tok[] } | null>(() => {
     const hit = cache.get(text);
     return hit ? { text, toks: hit } : null;

@@ -134,6 +134,53 @@ export function formatInterviewFront(text: string): string {
   return text.replace(/\s*【답변】\s*/, "\n\n【답변】\n").replace(/([.?!])\s+(?=\S)/g, "$1\n");
 }
 
+/** 면접 카드 앞면에 적는 "키워드 + 동사" 한 묶음. 예: 규칙→지키다 */
+export interface FrontKeyword {
+  kw: string;
+  verb: string;
+}
+
+// 카드 앞면 형식: "【1 질문】 질문? 【키워드】 규칙→지키다 / 도전→하다 【답변】 …{1|규칙을 지키}면서 …"
+// - 【키워드】 칸: 키워드→동사를 " / "로 나눠 적는다(순서대로 1번, 2번 … 색이 정해진다).
+// - 답변 속 {번호|문구}: 그 번호 키워드와 같은 색으로 칠한다.
+const KEYWORD_BLOCK = /\s*【키워드】\s*([^【]*?)\s*(?=【답변】)/;
+const INLINE_KEYWORD = /\{(\d+)\|([^}]*)\}/g;
+
+/** 앞면 글에서 【키워드】 칸을 떼어 내고, 키워드 목록과 나머지 본문을 돌려준다. 없으면 목록이 빈 배열이다. */
+export function parseFrontKeywords(text: string): { keywords: FrontKeyword[]; body: string } {
+  const m = text.match(KEYWORD_BLOCK);
+  if (!m) return { keywords: [], body: text };
+  const keywords = m[1]
+    .split("/")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => {
+      const [kw, verb] = x.split("→").map((y) => y.trim());
+      return { kw, verb: verb ?? "" };
+    });
+  return { keywords, body: text.replace(KEYWORD_BLOCK, "") };
+}
+
+/** 【키워드】 칸과 {번호|…} 표시를 걷어 낸 보통 글(읽어 주기·목록 표시용). */
+export function plainFront(text: string): string {
+  if (!text.includes("{") && !text.includes("【키워드】")) return text;
+  return parseFrontKeywords(text).body.replace(INLINE_KEYWORD, "$2");
+}
+
+/** 본문을 {번호|문구} 기준으로 나눈다. n이 있으면 키워드 문구(n번 색), 없으면 보통 글. */
+export function splitInlineKeywords(text: string): { s: string; n?: number }[] {
+  const out: { s: string; n?: number }[] = [];
+  let last = 0;
+  for (const m of text.matchAll(INLINE_KEYWORD)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push({ s: text.slice(last, i) });
+    out.push({ s: m[2], n: Number(m[1]) });
+    last = i + m[0].length;
+  }
+  if (last < text.length) out.push({ s: text.slice(last) });
+  return out;
+}
+
 /** list[index]가 속한 질문 묶음(대 질문 + 꼬리질문들)이 끝나는 다음 위치를 돌려준다. */
 export function chainBlockEnd(list: WordEntry[], index: number): number {
   const c = list[index] ? chainOf(list[index]) : null;

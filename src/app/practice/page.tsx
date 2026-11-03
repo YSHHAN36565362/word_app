@@ -20,6 +20,8 @@ import PageHeader from "@/components/PageHeader";
 import Confetti from "@/components/Confetti";
 import FeedbackFlash from "@/components/FeedbackFlash";
 import SpeakButton, { speak } from "@/components/SpeakButton";
+import RichFront from "@/components/RichFront";
+import KeywordModeToggle from "@/components/KeywordModeToggle";
 import MemoPad from "@/components/MemoPad";
 import HintText from "@/components/HintText";
 import FontSizeControl from "@/components/FontSizeControl";
@@ -34,7 +36,7 @@ import { useRoundSize } from "@/hooks/useRoundSize";
 import { useHintTheme } from "@/hooks/useHintTheme";
 import { DEFAULT_HINT_THEME } from "@/lib/hintTheme";
 import { fetchWords } from "@/lib/api";
-import { chainOf, formatInterviewFront, getDisplaySide, isOrderedList, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, shuffleUnlessOrdered, withoutKey, wordKey } from "@/lib/queue";
+import { chainOf, parseFrontKeywords, plainFront, getDisplaySide, isOrderedList, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, shuffleUnlessOrdered, withoutKey, wordKey } from "@/lib/queue";
 import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { getDeviceId, getDeviceLabel } from "@/lib/device";
 import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, resetWordMastery, saveWordMastery } from "@/lib/mastery";
@@ -934,10 +936,11 @@ function PracticePageInner() {
         ) : !finished && current ? (
           <div className="mt-3">
             <div className="mb-1.5 flex items-center justify-end gap-1.5">
+              {parseFrontKeywords(current.word).keywords.length > 0 && <KeywordModeToggle />}
               <div className="mr-1">
                 <FontSizeControl fontScale={fontScale} onAdjust={adjustFontScale} onReset={() => setFontScale(1)} />
               </div>
-              <SpeakButton text={current.word} compact />
+              <SpeakButton text={plainFront(current.word)} compact />
               <button onClick={() => toggleFavorite(current)} className="text-lg" aria-label="즐겨찾기">
                 {favorites.has(wordKey(current)) ? "★" : "☆"}
                 <KeyBadge>K</KeyBadge>
@@ -951,7 +954,7 @@ function PracticePageInner() {
                   className="text-center font-extrabold"
                   style={{ fontSize: "calc(1.5rem * var(--practice-font-scale, 1))", whiteSpace: current?.ordered ? "pre-line" : undefined }}
                 >
-                  <Furigana text={current?.ordered ? formatInterviewFront(qText) : qText} enabled={false} />
+                  {current?.ordered ? <RichFront text={qText} furigana={false} /> : <Furigana text={qText} enabled={false} />}
                 </div>
               }
               back={

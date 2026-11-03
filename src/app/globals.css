@@ -372,3 +372,24 @@ details[open] > summary .details-chevron {
 .furi-en {
   opacity: 0.75;
 }
+
+/* 면접 카드 키워드 색(번호 순서대로 6색). 밝은 화면에서는 진하게, 어두운 화면에서는 밝게. */
+:root {
+  --kw-0: #b45309; --kw-1: #be185d; --kw-2: #0e7490; --kw-3: #6d28d9; --kw-4: #15803d; --kw-5: #c2410c; --kw-6: #0f766e; --kw-7: #4338ca;
+}
+:root[data-theme="dark"] {
+  --kw-0: #ffc800; --kw-1: #ff7ab8; --kw-2: #4fd8ff; --kw-3: #b794ff; --kw-4: #7dde3a; --kw-5: #ff9a52; --kw-6: #5eead4; --kw-7: #93a5ff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --kw-0: #ffc800; --kw-1: #ff7ab8; --kw-2: #4fd8ff; --kw-3: #b794ff; --kw-4: #7dde3a; --kw-5: #ff9a52; --kw-6: #5eead4; --kw-7: #93a5ff;
+  }
+}
+.kw-bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 14px; }
+.kw-chip { display: inline-flex; align-items: baseline; gap: 6px; border-radius: 999px; padding: 3px 12px; font-size: 0.8em; border: 2px solid currentColor; }
+.kw-chip b { font-weight: 900; }
+.kw-chip .kw-verb { font-weight: 700; opacity: 0.9; }
+.kw { border-radius: 4px; padding: 0 3px; font-weight: 900; border-bottom: 3px solid currentColor; }
+.kw-0 { color: var(--kw-0); } .kw-1 { color: var(--kw-1); } .kw-2 { color: var(--kw-2); }
+.kw-3 { color: var(--kw-3); } .kw-4 { color: var(--kw-4); } .kw-5 { color: var(--kw-5); }
+.kw-6 { color: var(--kw-6); } .kw-7 { color: var(--kw-7); }
