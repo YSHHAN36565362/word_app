@@ -1226,7 +1226,7 @@ function PracticePageInner() {
 
       <label className="mt-5 flex cursor-pointer items-center gap-2 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
         <input type="checkbox" checked={sequential} onChange={(e) => setSequential(e.target.checked)} />
-        순서대로 연습 (섞지 않고 단어장 순서 그대로 — 면접 질문을 찾아볼 때)
+        순서대로 연습 (섞지 않고 단어장 순서 그대로)
       </label>
 
       <div className="mt-2 grid grid-cols-3 gap-2">

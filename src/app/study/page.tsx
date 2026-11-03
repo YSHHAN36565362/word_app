@@ -43,6 +43,7 @@ export default function StudyPage() {
 
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
+  const [sequential, setSequential] = useState(false);
   const [starting, setStarting] = useState(false);
   // 끝까지 안 보고 나간 단어 목록/위치를 그대로 이어볼 수 있게 저장해둔다. 이게 없으면
   // "이 학습 다시 하기"가 단어 목록을 새로 불러와 처음(0)부터 다시 시작해서, 예전에
@@ -78,14 +79,15 @@ export default function StudyPage() {
     const list = await fetchWords(paths);
     setStarting(false);
     if (list.length === 0) return;
-    const pool = shuffleUnlessOrdered(list);
+    // "순서대로 학습"이면 섞지 않고 단어장(파일) 순서 그대로 쓴다.
+    const pool = sequential ? [...list] : shuffleUnlessOrdered(list);
     setWords(pool);
     setIndex(0);
     setShowHint(false);
     setActiveFilePaths(paths);
     setActiveFileLabels(labels);
     setFocus(true);
-    writeShareUrl(paths); // 이 주소를 보내면 상대도 같은 단어장으로 시작한다
+    writeShareUrl(paths, { sequential }); // 이 주소를 보내면 상대도 같은 단어장으로 시작한다
     if (userId) {
       saveProgress(userId, "study", {
         words: pool,
@@ -119,7 +121,9 @@ export default function StudyPage() {
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const shared = readShareUrl();
-    if (shared) setRestoreRequest({ paths: shared.paths, autoStart: true });
+    if (!shared) return;
+    if (shared.sequential) setSequential(true);
+    setRestoreRequest({ paths: shared.paths, autoStart: true });
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -366,7 +370,7 @@ export default function StudyPage() {
           label="학습 종료하기"
           extraAction={[
             ...(!done && orderedMode ? [{ label: "다음 질문으로 넘어가기 [N]", onClick: skipToNextQuestion }] : []),
-            ...(!done && words.length > 1 ? [{ label: "단어 순서 섞기", onClick: shuffleRemaining }] : []),
+            ...(!done && !sequential && words.length > 1 ? [{ label: "단어 순서 섞기", onClick: shuffleRemaining }] : []),
           ]}
         />
       </FocusScreen>
@@ -430,7 +434,12 @@ export default function StudyPage() {
         <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restoreRequest?.paths ?? null} />
       </div>
 
-      <button onClick={begin} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent mt-5 w-full">
+      <label className="mt-5 flex cursor-pointer items-center gap-2 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+        <input type="checkbox" checked={sequential} onChange={(e) => setSequential(e.target.checked)} />
+        순서대로 연습 (섞지 않고 단어장 순서 그대로)
+      </label>
+
+      <button onClick={begin} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent mt-2 w-full">
         {starting ? (
           <>
             <Spinner size={16} className="mr-2" />
