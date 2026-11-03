@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUserId } from "@/hooks/useUserId";
-import { loadFrequentlyUnknownWords } from "@/lib/mastery";
+import { loadFrequentlyWrongWords } from "@/lib/mastery";
 import { WordEntry } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 
@@ -17,7 +17,7 @@ export default function FrequentReviewPage() {
 
   useEffect(() => {
     if (!ready || !userId) return;
-    loadFrequentlyUnknownWords(userId).then((w) => {
+    loadFrequentlyWrongWords(userId).then((w) => {
       setWords(w);
       setLoading(false);
     });
@@ -53,7 +53,7 @@ export default function FrequentReviewPage() {
         icon="복"
         accent="var(--red)"
         title="연습 복습"
-        subtitle="연습에서 모름(0)으로 5번 이상 채점된, 유독 안 외워지는 단어만 모았습니다. 한자를 눌러보세요."
+        subtitle="연습에서 헷갈림·모름으로 5번 이상 채점된, 유독 안 외워지는 단어만 모았습니다. 한자를 눌러보세요."
       />
 
       {loading ? (

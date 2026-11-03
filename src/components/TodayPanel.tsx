@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { loadAllMastery } from "@/lib/mastery";
+import { loadAllMastery, loadFrequentlyWrongWords } from "@/lib/mastery";
+import { addWordsToWrongNotes } from "@/lib/progress";
 import { dueNowCount, studiedTodayCount } from "@/lib/insights";
 import { useDailyGoal } from "@/hooks/useDailyGoal";
 
 interface ViewProps {
   due: number;
+  /** 헷갈림·모름으로 5번 이상 채점된 단어 수 */
+  frequent?: number;
   studied: number;
   goal: number;
 }
@@ -16,7 +19,7 @@ interface ViewProps {
  * 표시 전용 부분. 데이터 로딩과 분리해둬서, Supabase가 없는 환경(로컬 개발 등)에서도
  * 임의의 값으로 렌더링을 확인할 수 있다.
  */
-export function TodayPanelView({ due, studied, goal }: ViewProps) {
+export function TodayPanelView({ due, frequent = 0, studied, goal }: ViewProps) {
   const ratio = goal > 0 ? Math.min(1, studied / goal) : 0;
   const done = studied >= goal;
   // 원형 진행 링(반지름 26 → 둘레 약 163.4).
@@ -77,6 +80,11 @@ export function TodayPanelView({ due, studied, goal }: ViewProps) {
           학습 통계 보기
         </Link>
       </div>
+      {frequent > 0 && (
+        <Link href="/practice/frequent" className="btn-3d btn-blue mt-2 block w-full text-center text-xs">
+          자주 틀리는 단어 복습 ({frequent}) — 헷갈림·모름 5번 이상
+        </Link>
+      )}
     </div>
   );
 }
@@ -94,15 +102,26 @@ interface Props {
  */
 export default function TodayPanel({ userId, ready }: Props) {
   const { goal } = useDailyGoal();
-  const [stat, setStat] = useState<{ due: number; studied: number; hasHistory: boolean } | null>(null);
+  const [stat, setStat] = useState<{ due: number; frequent: number; studied: number; hasHistory: boolean } | null>(null);
 
   useEffect(() => {
     if (!ready || !userId) return;
     let alive = true;
     loadAllMastery(userId).then((m) => {
       if (!alive) return;
-      setStat({ due: dueNowCount(m), studied: studiedTodayCount(m), hasHistory: m.size > 0 });
+      let frequent = 0;
+      for (const info of m.values()) if (info.wrongCount >= 5) frequent += 1;
+      setStat({ due: dueNowCount(m), frequent, studied: studiedTodayCount(m), hasHistory: m.size > 0 });
     });
+    // 예전부터 5번 이상 틀린 단어도 오답 노트에 들어가도록, 이 번호로는 처음 홈을 열 때 한 번만 채워 넣는다
+    // (이후에 오답 노트에서 지운 단어가 다시 들어오지 않게, 다음부터는 연습 중 5번째가 되는 순간에만 자동으로 넣는다).
+    const flag = `word_app_frequent_wrong_synced_${userId}`;
+    if (typeof window !== "undefined" && window.localStorage.getItem(flag) !== "1") {
+      loadFrequentlyWrongWords(userId).then(async (words) => {
+        if (words.length > 0) await addWordsToWrongNotes(userId, words);
+        window.localStorage.setItem(flag, "1");
+      });
+    }
     return () => {
       alive = false;
     };
@@ -112,5 +131,5 @@ export default function TodayPanel({ userId, ready }: Props) {
   // 띄우는 게 오히려 방해라 아무것도 보여주지 않는다 — 한 번이라도 채점하면 나타난다.
   if (!ready || !userId || stat === null || !stat.hasHistory) return null;
 
-  return <TodayPanelView due={stat.due} studied={stat.studied} goal={goal} />;
+  return <TodayPanelView due={stat.due} frequent={stat.frequent} studied={stat.studied} goal={goal} />;
 }

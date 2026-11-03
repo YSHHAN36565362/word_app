@@ -37,6 +37,8 @@ interface RestoreRequest {
   paths: string[];
   /** true면 체크박스 복원 후 자동으로 학습을 시작한다. false면 체크박스/대시보드만 맞춰준다. */
   autoStart: boolean;
+  /** 주소로 열었거나 F5로 새로고침한 경우 — 저장된 진행이 있으면 새로 섞지 않고 그 위치를 이어간다. */
+  fromUrl?: boolean;
 }
 
 export default function StudyPage() {
@@ -46,6 +48,7 @@ export default function StudyPage() {
   const [selectedFiles, setSelectedFiles] = useState<FileRef[]>([]);
   const [restoreRequest, setRestoreRequest] = useState<RestoreRequest | null>(null);
   const [sequential, setSequential] = useState(false);
+  const [savedLoaded, setSavedLoaded] = useState(false);
   const [starting, setStarting] = useState(false);
   // 끝까지 안 보고 나간 단어 목록/위치를 그대로 이어볼 수 있게 저장해둔다. 이게 없으면
   // "이 학습 다시 하기"가 단어 목록을 새로 불러와 처음(0)부터 다시 시작해서, 예전에
@@ -67,9 +70,15 @@ export default function StudyPage() {
   }, [ready, userId]);
 
   useEffect(() => {
-    if (!ready || !userId) return;
+    if (!ready) return;
+    if (!userId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSavedLoaded(true);
+      return;
+    }
     listSavedProgress<StudyProgress>(userId, "study").then((list) => {
       setSavedList(list.filter((e) => e.data?.words?.length && e.data.studyIndex < e.data.words.length));
+      setSavedLoaded(true);
     });
   }, [ready, userId]);
 
@@ -125,7 +134,7 @@ export default function StudyPage() {
     const shared = readShareUrl();
     if (!shared) return;
     if (shared.sequential) setSequential(true);
-    setRestoreRequest({ paths: shared.paths, autoStart: true });
+    setRestoreRequest({ paths: shared.paths, autoStart: true, fromUrl: true });
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -135,11 +144,17 @@ export default function StudyPage() {
     const selectedKey = fileKeyOf(selectedFiles.map((f) => f.path));
     const targetKey = fileKeyOf(restoreRequest.paths);
     if (selectedKey !== targetKey) return;
-    const { autoStart } = restoreRequest;
+    if (restoreRequest.fromUrl && !savedLoaded) return; // 저장된 진행 목록이 올 때까지 기다린다
+    const { autoStart, fromUrl } = restoreRequest;
     setRestoreRequest(null);
-    if (autoStart) begin();
+    if (autoStart) {
+      // 주소로 열었거나 F5로 새로고침했다면, 저장된 진행이 있을 때 새로 섞어 시작하지 말고 그 위치를 이어간다.
+      const saved = fromUrl ? savedList.find((e) => fileKeyOf(e.data.filePaths) === targetKey) : undefined;
+      if (saved) resume(saved.data);
+      else begin();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFiles, restoreRequest]);
+  }, [selectedFiles, restoreRequest, savedLoaded]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // 이미 본 단어(index 이전)는 그대로 두고, 아직 안 본 단어들의 순서만 다시 섞는다.

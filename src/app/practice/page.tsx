@@ -37,7 +37,7 @@ import { useHintTheme } from "@/hooks/useHintTheme";
 import { DEFAULT_HINT_THEME } from "@/lib/hintTheme";
 import { fetchWords } from "@/lib/api";
 import { chainOf, parseFrontKeywords, plainFront, getDisplaySide, isOrderedList, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, shuffleUnlessOrdered, withoutKey, wordKey } from "@/lib/queue";
-import { appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
+import { addWordsToWrongNotes, appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { getDeviceId, getDeviceLabel } from "@/lib/device";
 import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, resetWordMastery, saveWordMastery } from "@/lib/mastery";
 import { deleteLearningLog, fileKeyOf, fileSummaryOf, formatKstDateTime, isFileKeyMissing, upsertLearningLog } from "@/lib/learningLog";
@@ -81,6 +81,8 @@ interface RestoreRequest {
   mode: StudyMode;
   /** true면 체크박스 복원 후 자동으로 연습을 시작한다. false면 체크박스/대시보드만 맞춰준다. */
   autoStart: boolean;
+  /** 주소(?files=…)로 열었거나 F5로 새로고침해서 자동 시작하는 경우 — 저장된 진행이 있으면 새로 시작하지 않고 그걸 이어간다. */
+  fromUrl?: boolean;
 }
 
 /**
@@ -142,6 +144,9 @@ function PracticePageInner() {
   // 비어 있다가 갑자기 카드가 나타나 보이던 것을, 불러오는 동안에는 로딩 표시를,
   // 끝나면 목록 또는 "저장된 데이터가 없습니다" 안내를 보여주도록 바꿨다.
   const [savedListLoading, setSavedListLoading] = useState(false);
+  // 저장된 진행 목록을 다 불러왔는지 — 새로고침(F5)으로 자동 시작할 때, 목록이 오기 전에 시작해서
+  // 저장된 진행을 덮어쓰지 않도록 기다리는 데 쓴다.
+  const [savedListLoaded, setSavedListLoaded] = useState(false);
   // "이어서 연습하기" 카드를 직접 삭제하는 중인 fileKey — 설정의 "학습 기록 관리"까지
   // 안 가도 여기서 바로 0개짜리 등 필요 없는 진행을 지울 수 있게 했다.
   const [deletingSavedKey, setDeletingSavedKey] = useState<string>("");
@@ -261,12 +266,17 @@ function PracticePageInner() {
   }, [ready, userId]);
 
   useEffect(() => {
-    if (!ready || !userId) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!ready) return;
+    if (!userId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSavedListLoaded(true);
+      return;
+    }
     setSavedListLoading(true);
     listSavedProgress<PracticeProgress>(userId, "practice").then((list) => {
       setSavedList(list.filter((e) => e.data && (e.data.queue?.length || e.data.currentWord)));
       setSavedListLoading(false);
+      setSavedListLoaded(true);
     });
   }, [ready, userId]);
 
@@ -389,14 +399,16 @@ function PracticePageInner() {
     persist({ queue: q, current: first, total: pool.length, done: 0, round: 0, side, m: selectedMode, labels, paths });
   }
 
-  async function begin(selectedMode: StudyMode) {
+  async function begin(selectedMode: StudyMode, fromUrl = false) {
     if (selectedFiles.length === 0) return;
     const paths = selectedFiles.map((f) => f.path);
     // 이전과 정확히 같은 파일 조합이면, 새로 섞어 시작하는 대신 저장해둔 지점 그대로
     // 이어간다 — "이전과 같은 단어장 목록을 누르면 자동으로 이어서" 되길 원한다는
     // 요청에 따른 것.
     // (순서대로 연습을 켠 경우는 저장된 섞인 큐 대신 새로 순서대로 시작한다.)
-    const existing = sequential ? undefined : savedList.find((e) => e.fileKey === fileKeyOf(paths));
+    // 주소로 열었거나 F5로 새로고침한 경우에는 순서대로 연습이 켜져 있어도 저장된 진행을 먼저 이어간다
+    // (그렇지 않으면 새로고침할 때마다 처음부터 다시 시작하고 저장된 진행을 덮어쓴다).
+    const existing = sequential && !fromUrl ? undefined : savedList.find((e) => e.fileKey === fileKeyOf(paths));
     if (existing) {
       resume(existing.data);
       return;
@@ -475,7 +487,7 @@ function PracticePageInner() {
     if (!shared) return;
     const sharedMode = (["word_only", "meaning_only", "random"] as const).find((m) => m === shared.mode) ?? "random";
     if (shared.sequential) setSequential(true);
-    setRestoreRequest({ paths: shared.paths, mode: sharedMode, autoStart: true });
+    setRestoreRequest({ paths: shared.paths, mode: sharedMode, autoStart: true, fromUrl: true });
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -485,11 +497,12 @@ function PracticePageInner() {
     const selectedKey = fileKeyOf(selectedFiles.map((f) => f.path));
     const targetKey = fileKeyOf(restoreRequest.paths);
     if (selectedKey !== targetKey) return;
-    const { mode: modeToStart, autoStart } = restoreRequest;
+    if (restoreRequest.fromUrl && !savedListLoaded) return; // 저장된 진행 목록이 올 때까지 기다린다
+    const { mode: modeToStart, autoStart, fromUrl } = restoreRequest;
     setRestoreRequest(null);
-    if (autoStart) begin(modeToStart);
+    if (autoStart) begin(modeToStart, fromUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFiles, restoreRequest]);
+  }, [selectedFiles, restoreRequest, savedListLoaded]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   async function beginFromWrongNotes() {
@@ -624,6 +637,11 @@ function PracticePageInner() {
     const crossedRound = nextRound > roundCount && nextRound % userRoundSize === 0 && (nextQueue.length > 0 || nextCurrent !== null);
 
     const nextInfo = computeNextMastery(mastery.get(key), level);
+    // 헷갈림·모름이 쌓여 5번째가 되는 순간, 그 단어를 오답 노트에 자동으로 넣는다(이미 있으면 중복 없이 한 번만).
+    // 오답 노트에서 직접 지운 단어가 다시 들어오지 않도록, 5번째가 되는 그 한 번에만 넣는다.
+    if (userId && level < 60 && nextInfo.wrongCount >= 5 && (mastery.get(key)?.wrongCount ?? 0) < 5) {
+      addWordsToWrongNotes(userId, [current]);
+    }
 
     setTally((t) => ({
       ...t,

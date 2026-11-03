@@ -251,6 +251,27 @@ export async function loadFrequentlyUnknownWords(userId: string, threshold = 5):
   return data as WordEntry[];
 }
 
+/**
+ * "헷갈림(40)·모름(0)"으로 threshold번 이상 채점된 단어를 모아 돌려준다 — 홈의 "자주 틀리는 단어"와
+ * 오답 노트 자동 추가에 쓴다. (loadFrequentlyUnknownWords는 모름(0)만 세지만 여기는 헷갈림도 함께 센다.)
+ */
+export async function loadFrequentlyWrongWords(userId: string, threshold = 5): Promise<WordEntry[]> {
+  if (!userId) return [];
+  const supabase = await getSupabaseAsync();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("word_mastery")
+    .select("word, meaning, hint")
+    .eq("user_id", userId)
+    .gte("wrong_count", threshold)
+    .not("word", "is", null)
+    .order("wrong_count", { ascending: false })
+    .limit(500);
+  logSupabaseError("자주 틀리는 단어(5번 이상) 불러오기", error);
+  if (error || !data) return [];
+  return data as WordEntry[];
+}
+
 /** 단어의 숙련도 기록을 지운다 — 다음 연습부터는 "아직 안 본 단어"처럼 다시 우선 출제된다. */
 export async function resetWordMastery(userId: string, word: WordEntry): Promise<void> {
   if (!userId) return;
