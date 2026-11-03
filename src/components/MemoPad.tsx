@@ -51,6 +51,24 @@ export default function MemoPad() {
     KeyM: () => setOpen((prev) => !prev),
   });
 
+  // 메모가 열려 있는 동안 N = 메모 내용 전체 지우기. 학습·연습 화면의 N(다음 질문으로 넘어가기)과
+  // 같은 키라서, 캡처 단계에서 먼저 받아 그쪽으로 전달되지 않게 막는다 — 메모를 닫으면 N은 원래 기능으로 돌아간다.
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.code !== "KeyN" && e.key.toLowerCase() !== "n") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const canvas = canvasRef.current;
+      canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [open]);
+
   const panelRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
@@ -243,6 +261,7 @@ export default function MemoPad() {
           </button>
           <button onClick={clearCanvas} className="btn-3d btn-ghost px-2.5 py-1 text-[11px]">
             지우기
+            <KeyBadge>N</KeyBadge>
           </button>
           <div className="ml-auto flex items-center gap-1">
             <button
@@ -284,12 +303,16 @@ export default function MemoPad() {
           draggable={false}
           style={{ touchAction: "none", background: "#ffffff", cursor: "crosshair", ...noSelect }}
         />
+        <div className="flex items-end justify-between" style={{ borderTop: "1px solid var(--card-border)" }}>
+          <div className="px-3 pb-1.5 pt-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+            단축키&nbsp;
+            <b>N</b> 전체 지우기 · <b>M</b> 닫기
+          </div>
         <div
           onPointerDown={handleResizeStart}
           onPointerMove={handleResizeMove}
           onPointerUp={handleResizeEnd}
           onPointerLeave={handleResizeEnd}
-          className="self-end"
           style={{
             width: HANDLE,
             height: HANDLE,
@@ -300,6 +323,7 @@ export default function MemoPad() {
           }}
           aria-label="메모장 크기 조절"
         />
+        </div>
       </div>
     </>
   );

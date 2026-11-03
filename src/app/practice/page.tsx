@@ -98,6 +98,8 @@ interface UndoSnapshot {
   showAnswer: boolean;
   showHint: boolean;
   tally: SessionTally;
+  /** 이번 라운드가 시작될 때의 집계 — 라운드 완료 화면에서 "이번 라운드에 누른 횟수"를 뺄셈으로 구한다. */
+  roundBase: SessionTally;
   mascotState: MascotState;
   resultSaved: boolean;
   finishedAt: number | null;
@@ -241,6 +243,8 @@ function PracticePageInner() {
 
   // 이번 세션에서 어떤 채점을 몇 번 했는지 — 끝났을 때 요약 화면에 쓴다.
   const [tally, setTally] = useState<SessionTally>(EMPTY_TALLY);
+  // 현재 라운드가 시작될 때의 집계(라운드 완료 화면에서 라운드별 채점 횟수를 보여주기 위함).
+  const [roundBase, setRoundBase] = useState<SessionTally>(EMPTY_TALLY);
   const [finishedAt, setFinishedAt] = useState<number | null>(null);
   // 방금 한 채점을 되돌릴 수 있는 스냅샷. 채점할 때마다 그 직전 상태로 새로 채워지고
   // (한 단계만 되돌리기), 되돌리고 나면 다시 비운다.
@@ -376,6 +380,7 @@ function PracticePageInner() {
     setMastery(mastery);
     setRoundGateOpen(false);
     setTally({ ...EMPTY_TALLY, startedAt: Date.now() });
+    setRoundBase(EMPTY_TALLY);
     setFinishedAt(null);
     setLastUndo(null);
     setFocus(true);
@@ -432,6 +437,7 @@ function PracticePageInner() {
     // 이어서 할 때는 이전 세션의 채점 분포를 이어받을 방법이 없으니(저장하지 않는다)
     // 요약은 "이어서 한 이번 구간" 기준으로 새로 센다.
     setTally({ ...EMPTY_TALLY, startedAt: Date.now() });
+    setRoundBase(EMPTY_TALLY);
     setFinishedAt(null);
     setLastUndo(null);
     setFocus(true);
@@ -584,6 +590,7 @@ function PracticePageInner() {
       showAnswer,
       showHint,
       tally,
+      roundBase,
       mascotState,
       resultSaved,
       finishedAt,
@@ -652,6 +659,12 @@ function PracticePageInner() {
     if (userId) saveWordMastery(userId, current, nextInfo);
   }
 
+  // 라운드 완료 화면에서 다음 라운드로 넘어간다 — 지금까지의 집계를 새 라운드의 기준점으로 삼는다.
+  function continueRound() {
+    setRoundBase(tally);
+    setRoundGateOpen(false);
+  }
+
   // 방금 채점을 되돌린다: 큐/진행률/집계를 스냅샷 상태로 복원하고, 서버(Supabase)의
   // 그 단어 숙련도도 채점 전 값으로 되돌린다(처음 채점이었으면 아예 지운다) — misclick
   // 한 번으로 실제 큐 위치와 SRS 간격까지 어긋나는 걸 막기 위함이다. 한 단계만 되돌릴
@@ -667,6 +680,7 @@ function PracticePageInner() {
     setShowAnswer(u.showAnswer);
     setShowHint(u.showHint);
     setTally(u.tally);
+    setRoundBase(u.roundBase);
     setMascotState(u.mascotState);
     setResultSaved(u.resultSaved);
     setFinishedAt(u.finishedAt);
@@ -759,8 +773,8 @@ function PracticePageInner() {
   // 라운드 완료 화면: 마우스 대신 Space/Enter로 다음 라운드를 이어서 한다.
   useKeyboardShortcuts(
     {
-      " ": () => setRoundGateOpen(false),
-      Enter: () => setRoundGateOpen(false),
+      " ": continueRound,
+      Enter: continueRound,
     },
     focus && !finished && current !== null && roundGateOpen
   );
@@ -928,7 +942,27 @@ function PracticePageInner() {
             <div className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
               전체 {doneCount} / {total} · {queue.length + 1}개 남음
             </div>
-            <button onClick={() => setRoundGateOpen(false)} className="btn-3d btn-accent mt-4 w-full">
+            <div className="mt-4 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
+              이번 라운드에서 누른 횟수
+            </div>
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              {[
+                { label: "완벽함", value: tally.perfect - roundBase.perfect, color: "var(--accent)" },
+                { label: "조금 앎", value: tally.learned - roundBase.learned, color: "var(--blue)" },
+                { label: "헷갈림", value: tally.shaky - roundBase.shaky, color: "var(--amber)" },
+                { label: "모름", value: tally.unknown - roundBase.unknown, color: "var(--red)" },
+              ].map((r) => (
+                <div key={r.label} className="rounded-xl py-2" style={{ background: "var(--hint-bg)" }}>
+                  <div className="text-lg font-extrabold" style={{ color: r.color }}>
+                    {r.value}
+                  </div>
+                  <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    {r.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={continueRound} className="btn-3d btn-accent mt-4 w-full">
               다음 라운드 계속하기
               <KeyBadge>Space</KeyBadge>
             </button>
