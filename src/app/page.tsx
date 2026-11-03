@@ -11,6 +11,7 @@ import { useUserId } from "@/hooks/useUserId";
 import { loadStreak } from "@/lib/streak";
 import StreakFlame from "@/components/StreakFlame";
 import TodayPanel from "@/components/TodayPanel";
+import FavoritesPanel from "@/components/FavoritesPanel";
 
 // splitText로 글자 단위 span을 만든 뒤 이 클래스들을 타겟으로 삼아 위아래로 둥실둥실
 // 계속 움직이게 한다(말풍선들과 같은 "살아있는" 느낌을 D-day 카드에도 준다).
@@ -188,6 +189,8 @@ export default function Home() {
       )}
 
       <TodayPanel userId={userId} ready={ready} />
+
+      <FavoritesPanel userId={userId} ready={ready} />
 
       <motion.div
         className="mt-6 w-full rounded-2xl px-6 py-5"
