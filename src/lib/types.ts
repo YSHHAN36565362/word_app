@@ -4,6 +4,8 @@ export interface WordEntry {
   hint: string;
   /** 파일 맨 위에 `#순서대로` 표시가 있으면 true — 섞지 않고 파일 순서대로 출제한다(면접 꼬리질문용). */
   ordered?: boolean;
+  /** 오답 노트에 들어온 시각(ISO). 오답 노트를 날짜별로 묶어 보여주는 데 쓴다. 예전에 쌓인 단어엔 없다. */
+  addedAt?: string;
 }
 
 export interface FileRef {

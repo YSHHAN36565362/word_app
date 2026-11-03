@@ -347,7 +347,9 @@ export async function addWordsToWrongNotes(userId: string, newWords: WordEntry[]
   if (!userId || newWords.length === 0) return;
   await chainWrongNotes(userId, async () => {
     const existing = await loadWrongNotes(userId);
-    await writeWrongNotes(userId, [...existing, ...newWords]);
+    const now = new Date().toISOString();
+    const stamped = newWords.map((w) => (w.addedAt ? w : { ...w, addedAt: now }));
+    await writeWrongNotes(userId, [...existing, ...stamped]);
   });
 }
 

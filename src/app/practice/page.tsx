@@ -37,6 +37,7 @@ import { useHintTheme } from "@/hooks/useHintTheme";
 import { DEFAULT_HINT_THEME } from "@/lib/hintTheme";
 import { fetchWords } from "@/lib/api";
 import { chainOf, parseFrontKeywords, plainFront, getDisplaySide, isOrderedList, requeuePosition, requeueRangeBounds, ROUND_SIZE, shuffle, shuffleUnlessOrdered, withoutKey, wordKey } from "@/lib/queue";
+import { wrongNoteDateKey } from "@/lib/wrongNoteDates";
 import { addWordsToWrongNotes, appendStudyStat, deleteProgress, listSavedProgress, loadWrongNotes, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { getDeviceId, getDeviceLabel } from "@/lib/device";
 import { computeNextMastery, excludeNotDue, loadAllMastery, loadDueReviewWords, loadMasteredWords, MasteryInfo, prioritizeByMastery, resetWordMastery, saveWordMastery } from "@/lib/mastery";
@@ -508,8 +509,15 @@ function PracticePageInner() {
   async function beginFromWrongNotes() {
     if (!userId) return;
     setStarting(true);
-    const [list, mastery] = await Promise.all([loadWrongNotes(userId), loadAllMastery(userId)]);
-    startWithList(list, mastery, "random", ["오답 노트"], [WRONG_NOTES_PATH_KEY]);
+    const [all, mastery] = await Promise.all([loadWrongNotes(userId), loadAllMastery(userId)]);
+    // 오답 노트 화면에서 날짜를 골라 왔다면(?dates=2026-11-03,none …) 그 날짜의 단어만 연습한다.
+    const datesParam = searchParams.get("dates");
+    let list = all;
+    if (datesParam) {
+      const picked = new Set(datesParam.split(","));
+      list = all.filter((w) => picked.has(wrongNoteDateKey(w)));
+    }
+    startWithList(list, mastery, "random", [datesParam ? "오답 노트(선택한 날짜)" : "오답 노트"], [WRONG_NOTES_PATH_KEY]);
     setStarting(false);
   }
 

@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 
 const TABS = [
+  { href: "/", label: "홈", icon: null, tour: "nav-home" },
   { href: "/study", label: "학습", icon: "/images/study.jpeg", tour: "nav-study" },
   { href: "/practice", label: "연습", icon: "/images/practice.jpeg", tour: "nav-practice" },
   { href: "/match", label: "매칭게임", icon: "/images/match.jpeg", tour: "nav-match" },
@@ -36,6 +37,7 @@ export default function BottomNav() {
       <div className="mx-auto flex max-w-xl items-stretch justify-between px-1 pb-[max(env(safe-area-inset-bottom),6px)] pt-1.5">
         {TABS.map((tab, i) => {
           const active = pathname === tab.href || (tab.href === "/more" && pathname.startsWith("/more"));
+          const iconSrc = tab.icon;
           return (
             <Link
               key={tab.href}
@@ -61,7 +63,16 @@ export default function BottomNav() {
                   ease: "easeOut",
                 }}
               >
-                <Image src={tab.icon} alt="" width={36} height={36} className="h-full w-full object-cover" />
+                {iconSrc ? (
+                  <Image src={iconSrc} alt="" width={36} height={36} className="h-full w-full object-cover" />
+                ) : (
+                  // 홈 탭은 그림 파일 대신 집 모양 아이콘을 그린다.
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? "#58cc02" : "#555"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M3 11.5 12 4l9 7.5" />
+                    <path d="M5.5 10v9.5h13V10" />
+                    <path d="M10 19.5v-5h4v5" />
+                  </svg>
+                )}
               </motion.span>
               {tab.label}
             </Link>
