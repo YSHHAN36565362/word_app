@@ -12,6 +12,8 @@ const HANDLE = 18;
 const MIN_LINE_WIDTH = 1;
 const MAX_LINE_WIDTH = 10;
 const DEFAULT_LINE_WIDTH = 2.5;
+const LAUNCHER_SIZE = 38; // 메모 버튼(초록 동그라미)의 지름(px)
+const LAUNCHER_KEY = "word_app_memo_launcher_pos";
 const LINE_WIDTH_STEP = 1;
 
 /** 제목 표시줄이 "잡고 끌 수 있는 손잡이"라는 걸 한눈에 보여주는 점 6개짜리 그립 아이콘. */
@@ -40,6 +42,9 @@ function GripIcon() {
  */
 export default function MemoPad() {
   const [open, setOpen] = useState(false);
+  // 메모 버튼 위치. null이면 기본 위치(우하단). 끌어서 옮기면 저장해 두었다가 다음에도 그 자리에 둔다.
+  const [btnPos, setBtnPos] = useState<{ left: number; top: number } | null>(null);
+  const btnDragRef = useRef<{ dx: number; dy: number; moved: boolean; startX: number; startY: number } | null>(null);
   const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null); // null = 기본 위치(우하단)
 
@@ -68,6 +73,57 @@ export default function MemoPad() {
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [open]);
+
+  // 저장해 둔 버튼 위치 복원(화면 밖으로 나가 있으면 안쪽으로 당긴다).
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(LAUNCHER_KEY);
+      if (!raw) return;
+      const v = JSON.parse(raw) as { left: number; top: number };
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBtnPos({
+        left: Math.min(Math.max(0, v.left), window.innerWidth - LAUNCHER_SIZE),
+        top: Math.min(Math.max(0, v.top), window.innerHeight - LAUNCHER_SIZE),
+      });
+    } catch {
+      /* 저장값이 깨졌으면 기본 위치를 쓴다 */
+    }
+  }, []);
+
+  function clampBtn(left: number, top: number) {
+    return {
+      left: Math.min(Math.max(0, left), window.innerWidth - LAUNCHER_SIZE),
+      top: Math.min(Math.max(0, top), window.innerHeight - LAUNCHER_SIZE),
+    };
+  }
+
+  function handleLauncherDown(e: React.PointerEvent<HTMLButtonElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    btnDragRef.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top, moved: false, startX: e.clientX, startY: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handleLauncherMove(e: React.PointerEvent<HTMLButtonElement>) {
+    const d = btnDragRef.current;
+    if (!d) return;
+    if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 6) return; // 살짝 눌렀을 땐 클릭으로 본다
+    d.moved = true;
+    setBtnPos(clampBtn(e.clientX - d.dx, e.clientY - d.dy));
+  }
+
+  function handleLauncherUp() {
+    const d = btnDragRef.current;
+    btnDragRef.current = null;
+    if (!d) return;
+    if (d.moved) {
+      setBtnPos((pos) => {
+        if (pos) window.localStorage.setItem(LAUNCHER_KEY, JSON.stringify(pos));
+        return pos;
+      });
+    } else {
+      setOpen(true);
+    }
+  }
 
   const panelRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -203,12 +259,29 @@ export default function MemoPad() {
     <>
       {!open && (
         <button
-          onClick={() => setOpen(true)}
-          className="btn-3d btn-accent px-4 py-2 text-sm"
-          style={{ position: "fixed", bottom: "6.5rem", right: "1rem", zIndex: 50 }}
+          onPointerDown={handleLauncherDown}
+          onPointerMove={handleLauncherMove}
+          onPointerUp={handleLauncherUp}
+          onPointerCancel={() => (btnDragRef.current = null)}
+          aria-label="메모장 열기 (끌어서 옮길 수 있어요)"
+          title="메모장 열기 [M] · 끌어서 옮기기"
+          className="btn-3d btn-accent"
+          style={{
+            position: "fixed",
+            zIndex: 50,
+            width: LAUNCHER_SIZE,
+            height: LAUNCHER_SIZE,
+            padding: 0,
+            borderRadius: "50%",
+            fontSize: 16,
+            fontWeight: 800,
+            lineHeight: 1,
+            touchAction: "none",
+            cursor: "grab",
+            ...(btnPos ? { top: btnPos.top, left: btnPos.left } : { bottom: "6.5rem", right: "1rem" }),
+          }}
         >
-          memo
-          <KeyBadge>M</KeyBadge>
+          M
         </button>
       )}
 
