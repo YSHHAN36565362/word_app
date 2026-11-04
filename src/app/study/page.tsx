@@ -30,7 +30,7 @@ import KeywordModeToggle from "@/components/KeywordModeToggle";
 import { deleteProgress, listSavedProgress, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { clearShareUrl, readShareUrl, writeShareUrl } from "@/lib/shareLink";
-import { addFavorite, loadFavoriteKeys, removeFavorite } from "@/lib/favorites";
+import { addFavorite, loadFavoriteKeys, loadFavorites, removeFavorite } from "@/lib/favorites";
 import { FileRef, StudyProgress, WordEntry } from "@/lib/types";
 
 interface RestoreRequest {
@@ -81,6 +81,21 @@ export default function StudyPage() {
       setSavedLoaded(true);
     });
   }, [ready, userId]);
+
+  // ★(K)로 표시해 둔 단어만 모아서 학습한다. 파일 진행 기록과 섞이지 않게, 이어하기 저장 없이 한 번 훑어보는 용도로만 쓴다.
+  async function beginFromFavorites() {
+    if (!userId) return;
+    setStarting(true);
+    const list = await loadFavorites(userId);
+    setStarting(false);
+    if (list.length === 0) return;
+    setWords(sequential ? list : shuffle(list));
+    setIndex(0);
+    setShowHint(false);
+    setActiveFilePaths([]);
+    setActiveFileLabels(["즐겨찾기"]);
+    setFocus(true);
+  }
 
   async function begin() {
     if (selectedFiles.length === 0) return;
@@ -456,6 +471,12 @@ export default function StudyPage() {
         <input type="checkbox" checked={sequential} onChange={(e) => setSequential(e.target.checked)} />
         순서대로 연습 (섞지 않고 단어장 순서 그대로)
       </label>
+
+      {favorites.size > 0 && (
+        <button onClick={beginFromFavorites} disabled={starting} className="btn-3d btn-amber mt-5 w-full">
+          ★ 즐겨찾기만 학습 ({favorites.size}개) — K로 표시해 둔 단어
+        </button>
+      )}
 
       <button onClick={begin} disabled={selectedFiles.length === 0 || starting} className="btn-3d btn-accent mt-2 w-full">
         {starting ? (

@@ -1287,6 +1287,12 @@ function PracticePageInner() {
         <FileSelector onSelectionChange={setSelectedFiles} restorePaths={restoreRequest?.paths ?? null} />
       </div>
 
+      {userId && favorites.size > 0 && !fromFavorites && (
+        <button onClick={beginFromFavorites} disabled={starting} className="btn-3d btn-amber mt-5 w-full">
+          ★ 즐겨찾기만 연습 ({favorites.size}개) — K로 표시해 둔 단어
+        </button>
+      )}
+
       <label className="mt-5 flex cursor-pointer items-center gap-2 text-xs font-bold" style={{ color: "var(--text-muted)" }}>
         <input type="checkbox" checked={sequential} onChange={(e) => setSequential(e.target.checked)} />
         순서대로 연습 (섞지 않고 단어장 순서 그대로)

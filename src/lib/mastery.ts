@@ -272,6 +272,23 @@ export async function loadFrequentlyWrongWords(userId: string, threshold = 5): P
   return data as WordEntry[];
 }
 
+/**
+ * "연습 복습"(헷갈림·모름 5번 이상) 목록에서 단어를 뺀다 — 틀린 횟수만 0으로 되돌리고 점수·복습 일정은 그대로 둔다.
+ * (다음에 다시 5번 이상 헷갈리거나 모르게 되면 목록에 다시 올라온다.)
+ */
+export async function clearFrequentWrong(userId: string, word: WordEntry): Promise<void> {
+  if (!userId) return;
+  cache.delete(userId);
+  const supabase = await getSupabaseAsync();
+  if (!supabase) return;
+  const { error } = await supabase
+    .from("word_mastery")
+    .update({ wrong_count: 0, unknown_count: 0 })
+    .eq("user_id", userId)
+    .eq("word_key", wordKey(word));
+  logSupabaseError("연습 복습에서 단어 빼기", error);
+}
+
 /** 단어의 숙련도 기록을 지운다 — 다음 연습부터는 "아직 안 본 단어"처럼 다시 우선 출제된다. */
 export async function resetWordMastery(userId: string, word: WordEntry): Promise<void> {
   if (!userId) return;
