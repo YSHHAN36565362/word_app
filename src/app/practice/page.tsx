@@ -1044,7 +1044,7 @@ function PracticePageInner() {
                       <HintFontControl />
                       <div
                         className="hint-reveal mt-1.5 w-full max-h-[42vh] overflow-y-auto rounded-xl px-4 py-3 leading-relaxed whitespace-pre-line"
-                        style={{ background: "var(--hint-bg)", color: "var(--text-muted)", fontSize: "calc(0.875rem * var(--practice-font-scale, 1) * var(--hint-font-scale, 1))" }}
+                        style={{ backgroundColor: "var(--hint-bg)", color: "var(--text-muted)", fontSize: "calc(0.875rem * var(--practice-font-scale, 1) * var(--hint-font-scale, 1))" }}
                       >
                         <HintText text={current.hint} theme={hintTheme} />
                       </div>

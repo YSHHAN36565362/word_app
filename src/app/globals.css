@@ -331,6 +331,11 @@ details[open] > summary .details-chevron {
     min-height: 6rem;
     resize: vertical;
     overflow-y: auto;
+    /* 오른쪽 아래에 잡을 곳이 보이도록 대각선 손잡이를 그린다(브라우저 기본 손잡이는 너무 작다). */
+    background-image: linear-gradient(135deg, transparent 0 60%, var(--text-muted) 60% 66%, transparent 66% 76%, var(--text-muted) 76% 82%, transparent 82%);
+    background-repeat: no-repeat;
+    background-size: 16px 16px;
+    background-position: right 2px bottom 2px;
   }
 }
 

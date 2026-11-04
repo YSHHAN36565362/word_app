@@ -30,6 +30,9 @@ export function useKeyboardShortcuts(handlers: KeyHandlerMap, enabled: boolean =
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      // Ctrl/Cmd/Alt를 같이 누르면 앱 단축키가 아니라 브라우저·시스템 기능이다(예: Ctrl+C·Cmd+C 복사,
+      // Cmd+A 전체 선택, Ctrl+R 새로고침). 이때는 가로채지 않고 그대로 통과시킨다.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const handler =
         handlersRef.current[e.code] ?? handlersRef.current[e.key] ?? handlersRef.current[e.key.toLowerCase()];
       if (handler) {
