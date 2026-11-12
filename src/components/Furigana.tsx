@@ -27,6 +27,32 @@ interface Tip {
 
 const KANJI = /[一-鿿々]/;
 
+// 예시 단어: [표기, 읽기, 영어 뜻]. 팝업을 열 때 그 한자들만 서버에서 받아 브라우저 메모리에 둔다.
+type Word = [string, string, string];
+const exCache = new Map<string, Word[]>();
+const exPending = new Map<string, Promise<void>>();
+
+function ensureExamples(chars: string[]): Promise<void> {
+  const need = chars.filter((c) => !exCache.has(c));
+  if (need.length === 0) return Promise.resolve();
+  const key = need.join("");
+  const running = exPending.get(key);
+  if (running) return running;
+  const job = fetch(`/api/kanji-words?c=${encodeURIComponent(key)}`)
+    .then((res) => (res.ok ? (res.json() as Promise<Record<string, Word[]>>) : null))
+    .then((data) => {
+      if (data) for (const c of need) exCache.set(c, data[c] ?? []);
+    })
+    .catch(() => {
+      /* 실패해도 예시만 안 보일 뿐이다. 다음에 열 때 다시 시도한다. */
+    })
+    .finally(() => exPending.delete(key));
+  exPending.set(key, job);
+  return job;
+}
+
+const MAX_EXAMPLES = 3;
+
 // 같은 문장은 한 번만 물어본다(브라우저 메모리). 한 화면에서 여러 줄이 동시에 요청하면
 // 30ms 모아서 한 번의 요청으로 보낸다.
 const cache = new Map<string, Tok[]>();
@@ -71,7 +97,7 @@ function load(text: string): Promise<Tok[] | null> {
 
 /**
  * 일본어 문장 안의 한자에 마우스를 올리거나(컴퓨터) 탭하면(휴대폰) 히라가나 읽기와 한자별 정보
- * (한국 한자음 · 일본 음독/훈독 · 영어 뜻)를 툴팁으로 띄운다.
+ * (한국 한자음 · 일본 음독/훈독 · 영어 뜻)와 그 한자가 들어간 예시 단어를 툴팁으로 띄운다.
  *
  * - 한자가 없는 문장은 서버에 묻지 않고 그대로 출력한다.
  * - enabled=false(예: 블러로 가려둔 줄, 정답 확인 전 문제)면 읽기가 보이지 않는다. 읽기는 미리 받아
@@ -87,6 +113,7 @@ export default function Furigana({ text: rawText, enabled = true }: { text: stri
     return hit ? { text, toks: hit } : null;
   });
   const [tip, setTip] = useState<Tip | null>(null);
+  const [exTick, setExTick] = useState(0); // 예시 단어가 도착하면 팝업을 다시 그리고 위치를 다시 잡는다.
   const tipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -127,16 +154,20 @@ export default function Furigana({ text: rawText, enabled = true }: { text: stri
     const left = Math.max(8, Math.min(tip.x - w / 2, vw - w - 8));
     let top = tip.top - h - 6;
     if (top < 8) top = tip.bottom + 6;
+    // 예시 단어가 붙어 팝업이 길어져도 화면 아래로 잘리지 않게 한다.
+    top = Math.max(8, Math.min(top, window.innerHeight - h - 8));
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
     el.style.visibility = "visible";
-  }, [tip]);
+  }, [tip, exTick]);
 
   if (!enabled || !loaded || loaded.text !== text) return <>{text}</>;
 
   function open(t: Tok, el: HTMLElement) {
     const rect = el.getBoundingClientRect();
-    setTip({ r: t.r as string, k: t.k ?? [], x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom });
+    const kanji = t.k ?? [];
+    setTip({ r: t.r as string, k: kanji, x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom });
+    ensureExamples(kanji.map((k) => k.c)).then(() => setExTick((n) => n + 1));
   }
 
   return (
@@ -169,9 +200,17 @@ export default function Furigana({ text: rawText, enabled = true }: { text: stri
             <div className="furi-read">{tip.r}</div>
             {tip.k.map((k) => (
               <div key={k.c} className="furi-kanji">
-                <b>{k.c}</b> {k.h && <span className="furi-hangul">{k.h}</span>}
-                {k.j && <span> · {k.j}</span>}
-                {k.e && <span className="furi-en"> · {k.e}</span>}
+                <div>
+                  <b>{k.c}</b> {k.h && <span className="furi-hangul">{k.h}</span>}
+                  {k.j && <span> · {k.j}</span>}
+                  {k.e && <span className="furi-en"> · {k.e}</span>}
+                </div>
+                {(exCache.get(k.c) ?? []).slice(0, MAX_EXAMPLES).map(([w, r, g]) => (
+                  <div key={w} className="furi-ex">
+                    <span className="furi-ex-w">{w}</span> <span>{r}</span>
+                    <span className="furi-en"> · {g}</span>
+                  </div>
+                ))}
               </div>
             ))}
           </div>,
