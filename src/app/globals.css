@@ -347,8 +347,12 @@ details[open] > summary .details-chevron {
 .furi-tip {
   position: fixed;
   z-index: 200;
-  pointer-events: none;
   padding: 6px 10px;
+  /* 읽기마다 예시가 붙어 길어질 수 있다 → 화면 높이를 넘으면 팝업 안에서 스크롤 */
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   border-radius: 10px;
   width: max-content;
   max-width: min(340px, calc(100vw - 16px));

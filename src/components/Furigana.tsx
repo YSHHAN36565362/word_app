@@ -51,7 +51,7 @@ function ensureExamples(chars: string[]): Promise<void> {
   return job;
 }
 
-const MAX_EXAMPLES = 3;
+const MAX_EXAMPLES = 10; // 읽기(음독·훈독) 하나당 단어 하나씩이라 한자에 따라 여러 줄이 된다.
 
 // 같은 문장은 한 번만 물어본다(브라우저 메모리). 한 화면에서 여러 줄이 동시에 요청하면
 // 30ms 모아서 한 번의 요청으로 보낸다.
@@ -132,10 +132,15 @@ export default function Furigana({ text: rawText, enabled = true }: { text: stri
     if (!tip) return;
     const close = (e: Event) => {
       const el = e.target as HTMLElement | null;
-      if (el && el.closest && el.closest(".furi-token")) return;
+      if (el && el.closest && el.closest(".furi-token, .furi-tip")) return;
       setTip(null);
     };
-    const closeOnScroll = () => setTip(null);
+    // 팝업 안을 스크롤할 때(예시가 많아 길어진 경우)는 닫지 않는다.
+    const closeOnScroll = (e: Event) => {
+      const el = e.target as Node | null;
+      if (el && tipRef.current && tipRef.current.contains(el)) return;
+      setTip(null);
+    };
     document.addEventListener("pointerdown", close);
     window.addEventListener("scroll", closeOnScroll, true);
     return () => {
@@ -196,7 +201,12 @@ export default function Furigana({ text: rawText, enabled = true }: { text: stri
       )}
       {tip &&
         createPortal(
-          <div ref={tipRef} className="furi-tip" style={{ visibility: "hidden", left: 0, top: 0 }}>
+          <div
+            ref={tipRef}
+            className="furi-tip"
+            style={{ visibility: "hidden", left: 0, top: 0 }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="furi-read">{tip.r}</div>
             {tip.k.map((k) => (
               <div key={k.c} className="furi-kanji">
