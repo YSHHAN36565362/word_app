@@ -27,6 +27,7 @@ import { fetchWords } from "@/lib/api";
 import { chainBlockEnd, chainShuffle, isOrderedList, parseFrontKeywords, plainFront, shuffle, shuffleUnlessOrdered, wordKey } from "@/lib/queue";
 import RichFront from "@/components/RichFront";
 import KeywordModeToggle from "@/components/KeywordModeToggle";
+import PopupKindButton from "@/components/PopupKindSettings";
 import { deleteProgress, listSavedProgress, saveProgress, SavedProgressEntry } from "@/lib/progress";
 import { fileKeyOf, fileSummaryOf, upsertLearningLog } from "@/lib/learningLog";
 import { clearShareUrl, readShareUrl, writeShareUrl } from "@/lib/shareLink";
@@ -327,6 +328,7 @@ export default function StudyPage() {
           <>
             <div className="mt-3 flex items-center justify-end gap-2">
               {parseFrontKeywords(current.word).keywords.length > 0 && <KeywordModeToggle />}
+              <PopupKindButton />
               <FontSizeControl fontScale={fontScale} onAdjust={adjustFontScale} onReset={() => setFontScale(1)} />
             </div>
             <div className="study-card mt-1.5 p-8 flex flex-col items-center gap-3">

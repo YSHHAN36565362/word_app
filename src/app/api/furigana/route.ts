@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import path from "node:path";
 import kuromoji from "kuromoji";
 import kanjiData from "@/data/kanji.json";
+import kanaWords from "@/data/kana-words.json";
+import type { PopupKind } from "@/lib/popupKinds";
 
 export const runtime = "nodejs";
 
@@ -34,10 +36,45 @@ interface KanjiInfo {
   e: string; // 영어 뜻
 }
 
+// 한자 없이 쓰인 단어의 뜻(scripts/build-kana-words.mjs 가 만든 데이터)
+interface KanaWord {
+  e: string; // 영어 뜻
+  k?: string; // 한자 표기
+  ko?: string; // 한국어 뜻(단어장에 실려 있을 때)
+}
+
 interface Token {
   s: string;
-  r: string | null;
+  r: string | null; // 히라가나 읽기(한자가 든 조각에만)
   k?: KanjiInfo[]; // 한자 정보(읽기가 있는 조각에만)
+  c?: PopupKind; // 팝업 종류(팝업이 뜨는 조각에만)
+  b?: string; // 기본형(가나 단어: できれば → できる)
+  w?: KanaWord; // 가나 단어의 뜻
+}
+
+const KANA_WORDS = kanaWords as Record<string, KanaWord>;
+const KATA_ONLY = /^[ァ-ヶー]+$/;
+
+// 형태소의 품사 → 가나 단어 팝업 종류. scripts/build-kana-words.mjs 의 kindOf 와 같은 규칙이어야 한다.
+function kindOf(t: kuromoji.IpadicFeatures, word: string): PopupKind | null {
+  if (t.pos === "副詞") return "adv";
+  if (t.pos === "接続詞") return "conj";
+  if (t.pos === "動詞" && t.pos_detail_1 === "自立") return "verb";
+  if ((t.pos === "形容詞" && t.pos_detail_1 === "自立") || (t.pos === "名詞" && t.pos_detail_1 === "形容動詞語幹")) return "adj";
+  if (t.pos === "名詞" && ["一般", "サ変接続", "副詞可能", "代名詞"].includes(t.pos_detail_1)) return KATA_ONLY.test(word) ? "kata" : "noun";
+  return null;
+}
+
+function toToken(t: kuromoji.IpadicFeatures): Token {
+  const s = t.surface_form;
+  if (KANJI.test(s)) {
+    const reading = t.reading && t.reading !== "*" ? t.reading : "";
+    return reading ? { s, r: kataToHira(reading), k: kanjiInfoOf(s), c: "kanji" } : { s, r: null };
+  }
+  const base = t.basic_form && t.basic_form !== "*" ? t.basic_form : s;
+  const kind = kindOf(t, base);
+  const w = kind ? KANA_WORDS[base] : undefined;
+  return kind && w ? { s, r: null, c: kind, b: base, w } : { s, r: null };
 }
 
 const KANJI_DATA = kanjiData as Record<string, { h: string; j: string; e: string }>;
@@ -56,8 +93,10 @@ function kanjiInfoOf(surface: string): KanjiInfo[] {
 
 /**
  * POST { texts: string[] } → { results: Token[][] }
- * 각 문장을 형태소로 나눠, 한자가 들어 있는 조각에만 히라가나 읽기(r)를 붙여 돌려준다.
- * (화면에서 한자에 마우스를 올리면 읽기를 툴팁으로 띄우는 데 쓴다.)
+ * 각 문장을 형태소로 나눠, 팝업을 띄울 수 있는 조각에 정보를 붙여 돌려준다.
+ * - 한자가 든 조각: 히라가나 읽기(r) + 한자별 정보(k)
+ * - 한자 없이 쓰인 부사·접속사·동사·형용사·명사·가타카나어: 기본형(b) + 뜻(w)
+ * 어떤 종류(c)를 실제로 보여줄지는 화면(Furigana)이 사용자의 설정에 따라 고른다.
  */
 export async function POST(req: Request) {
   let body: { texts?: unknown };
@@ -72,14 +111,7 @@ export async function POST(req: Request) {
   }
   try {
     const tokenizer = await getTokenizer();
-    const results: Token[][] = texts.map((text) =>
-      tokenizer.tokenize(text).map((t) => {
-        const reading = t.reading && t.reading !== "*" ? t.reading : "";
-        return KANJI.test(t.surface_form) && reading
-          ? { s: t.surface_form, r: kataToHira(reading), k: kanjiInfoOf(t.surface_form) }
-          : { s: t.surface_form, r: null };
-      })
-    );
+    const results: Token[][] = texts.map((text) => tokenizer.tokenize(text).map(toToken));
     return NextResponse.json({ results });
   } catch (e) {
     console.error("[furigana] failed", e);

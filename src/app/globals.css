@@ -386,6 +386,11 @@ details[open] > summary .details-chevron {
   font-weight: 700;
   font-size: 12px;
 }
+.furi-word-kanji {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.8;
+}
 .furi-hangul {
   font-weight: 700;
 }

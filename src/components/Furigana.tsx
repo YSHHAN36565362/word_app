@@ -3,6 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { plainFront } from "@/lib/queue";
+import { usePopupKinds } from "@/hooks/usePopupKinds";
+import type { PopupKind } from "@/lib/popupKinds";
 
 interface KanjiInfo {
   c: string;
@@ -11,21 +13,31 @@ interface KanjiInfo {
   e: string;
 }
 
+// 한자 없이 쓰인 단어의 뜻
+interface KanaWord {
+  e: string;
+  k?: string;
+  ko?: string;
+}
+
 interface Tok {
   s: string;
   r: string | null;
   k?: KanjiInfo[];
+  c?: PopupKind; // 팝업 종류(없으면 팝업이 없는 조각)
+  b?: string; // 가나 단어의 기본형
+  w?: KanaWord;
 }
 
 interface Tip {
-  r: string;
-  k: KanjiInfo[];
+  tok: Tok;
   x: number; // 글자 가운데(가로)
   top: number; // 글자 위쪽
   bottom: number; // 글자 아래쪽
 }
 
-const KANJI = /[一-鿿々]/;
+// 일본어 글자가 하나도 없는 문장(한국어 뜻풀이 등)은 서버에 묻지 않는다.
+const JAPANESE = /[ぁ-ゖァ-ヶ一-鿿々]/;
 
 // 예시 단어: [표기, 읽기, 영어 뜻]. 팝업을 열 때 그 한자들만 서버에서 받아 브라우저 메모리에 둔다.
 type Word = [string, string, string];
@@ -96,8 +108,10 @@ function load(text: string): Promise<Tok[] | null> {
 }
 
 /**
- * 일본어 문장 안의 한자에 마우스를 올리거나(컴퓨터) 탭하면(휴대폰) 히라가나 읽기와 한자별 정보
- * (한국 한자음 · 일본 음독/훈독 · 영어 뜻)와 그 한자가 들어간 예시 단어를 툴팁으로 띄운다.
+ * 일본어 문장 안의 단어에 마우스를 올리거나(컴퓨터) 탭하면(휴대폰) 툴팁을 띄운다.
+ * - 한자가 든 단어: 히라가나 읽기 + 한자별 정보(한국 한자음 · 음독/훈독 · 영어 뜻) + 읽기별 예시 단어
+ * - 한자 없이 쓰인 부사·접속사·동사·형용사·명사·가타카나어: 기본형 · 한자 표기 · 뜻
+ * 종류별로 켜고 끌 수 있다(usePopupKinds — 학습·연습 화면의 설정).
  *
  * - 한자가 없는 문장은 서버에 묻지 않고 그대로 출력한다.
  * - enabled=false(예: 블러로 가려둔 줄, 정답 확인 전 문제)면 읽기가 보이지 않는다. 읽기는 미리 받아
@@ -113,11 +127,12 @@ export default function Furigana({ text: rawText, enabled = true }: { text: stri
     return hit ? { text, toks: hit } : null;
   });
   const [tip, setTip] = useState<Tip | null>(null);
+  const [kindsOff] = usePopupKinds();
   const [exTick, setExTick] = useState(0); // 예시 단어가 도착하면 팝업을 다시 그리고 위치를 다시 잡는다.
   const tipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!KANJI.test(text)) return;
+    if (!JAPANESE.test(text)) return;
     let alive = true;
     load(text).then((toks) => {
       if (alive && toks) setLoaded({ text, toks });
@@ -170,15 +185,15 @@ export default function Furigana({ text: rawText, enabled = true }: { text: stri
 
   function open(t: Tok, el: HTMLElement) {
     const rect = el.getBoundingClientRect();
+    setTip({ tok: t, x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom });
     const kanji = t.k ?? [];
-    setTip({ r: t.r as string, k: kanji, x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom });
-    ensureExamples(kanji.map((k) => k.c)).then(() => setExTick((n) => n + 1));
+    if (kanji.length) ensureExamples(kanji.map((k) => k.c)).then(() => setExTick((n) => n + 1));
   }
 
   return (
     <>
       {loaded.toks.map((t, i) =>
-        t.r ? (
+        t.c && !kindsOff.has(t.c) ? (
           <span
             key={i}
             className="furi-token"
@@ -207,8 +222,21 @@ export default function Furigana({ text: rawText, enabled = true }: { text: stri
             style={{ visibility: "hidden", left: 0, top: 0 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="furi-read">{tip.r}</div>
-            {tip.k.map((k) => (
+            {tip.tok.r ? (
+              <div className="furi-read">{tip.tok.r}</div>
+            ) : (
+              <div className="furi-read">
+                {tip.tok.b ?? tip.tok.s}
+                {tip.tok.w?.k && <span className="furi-word-kanji"> 【{tip.tok.w.k}】</span>}
+              </div>
+            )}
+            {tip.tok.w && (
+              <div className="furi-kanji">
+                {tip.tok.w.ko && <div className="furi-hangul">{tip.tok.w.ko}</div>}
+                <div className="furi-en">{tip.tok.w.e}</div>
+              </div>
+            )}
+            {(tip.tok.k ?? []).map((k) => (
               <div key={k.c} className="furi-kanji">
                 <div>
                   <b>{k.c}</b> {k.h && <span className="furi-hangul">{k.h}</span>}

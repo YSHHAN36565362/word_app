@@ -5,6 +5,7 @@ import { SCORE_BTN_SCALE_MAX, SCORE_BTN_SCALE_MIN } from "@/hooks/useScoreButton
 import { ROUND_SIZE_MAX, ROUND_SIZE_MIN, ROUND_SIZE_STEP } from "@/hooks/useRoundSize";
 import { ROUND_SIZE } from "@/lib/queue";
 import { HINT_SCALE_MAX, HINT_SCALE_MIN, HINT_SCALE_STEP } from "@/lib/hintTheme";
+import { PopupKindChips } from "@/components/PopupKindSettings";
 
 interface Props {
   roundSize: number;
@@ -198,6 +199,14 @@ export default function PracticeSettingsPopover({
               disabled={!hideMascot}
             />
           </Row>
+
+          {/* 문장 속 단어를 눌렀을 때 뜨는 팝업을 종류별로 켜고 끈다 */}
+          <div className="mt-1 border-t pt-1.5" style={{ borderColor: "var(--card-border)" }}>
+            <div className="mb-1 text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>
+              단어 팝업
+            </div>
+            <PopupKindChips />
+          </div>
         </div>
       )}
     </div>
