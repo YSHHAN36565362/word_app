@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { POPUP_KINDS_EVENT, loadPopupKindsOff, savePopupKindsOff, type PopupKind } from "@/lib/popupKinds";
+import {
+  DEFAULT_POPUP_OPTIONS,
+  POPUP_KINDS_EVENT,
+  POPUP_OPTIONS_EVENT,
+  loadPopupKindsOff,
+  loadPopupOptions,
+  savePopupKindsOff,
+  savePopupOption,
+  type PopupKind,
+  type PopupOption,
+  type PopupOptions,
+} from "@/lib/popupKinds";
 
 /**
  * 단어 팝업 종류별 켬/끔. 학습·연습 어디서 바꿔도 같은 값을 쓰도록 localStorage에 두고,
@@ -30,4 +41,22 @@ export function usePopupKinds(): [ReadonlySet<PopupKind>, (kind: PopupKind, on: 
   }
 
   return [off, set];
+}
+
+/** 팝업 옵션(한국어 뜻 · JLPT 급수 · 오프라인 저장) 켬/끔. 반환: [현재 값, 옵션 하나를 바꾸는 함수] */
+export function usePopupOptions(): [PopupOptions, (id: PopupOption, on: boolean) => void] {
+  const [opts, setOpts] = useState<PopupOptions>(DEFAULT_POPUP_OPTIONS);
+
+  useEffect(() => {
+    const sync = () => setOpts(loadPopupOptions());
+    sync();
+    window.addEventListener(POPUP_OPTIONS_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(POPUP_OPTIONS_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
+  return [opts, savePopupOption];
 }

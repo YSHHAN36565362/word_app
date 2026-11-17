@@ -3,14 +3,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { plainFront } from "@/lib/queue";
-import { usePopupKinds } from "@/hooks/usePopupKinds";
-import type { PopupKind } from "@/lib/popupKinds";
+import { usePopupKinds, usePopupOptions } from "@/hooks/usePopupKinds";
+import { jlptLabel, type PopupKind } from "@/lib/popupKinds";
 
 interface KanjiInfo {
   c: string;
   h: string;
   j: string;
   e: string;
+  m?: string; // 한국어 뜻
+  n?: number; // JLPT 급수(N5=5 … N1=1)
 }
 
 // 한자 없이 쓰인 단어의 뜻
@@ -18,6 +20,7 @@ interface KanaWord {
   e: string;
   k?: string;
   ko?: string;
+  n?: number; // JLPT 급수(N5=5 … N1=1)
 }
 
 interface Tok {
@@ -27,6 +30,7 @@ interface Tok {
   c?: PopupKind; // 팝업 종류(없으면 팝업이 없는 조각)
   b?: string; // 가나 단어의 기본형
   w?: KanaWord;
+  m?: string; // 한자 단어 전체의 한국어 뜻
 }
 
 interface Tip {
@@ -39,8 +43,8 @@ interface Tip {
 // 일본어 글자가 하나도 없는 문장(한국어 뜻풀이 등)은 서버에 묻지 않는다.
 const JAPANESE = /[ぁ-ゖァ-ヶ一-鿿々]/;
 
-// 예시 단어: [표기, 읽기, 영어 뜻]. 팝업을 열 때 그 한자들만 서버에서 받아 브라우저 메모리에 둔다.
-type Word = [string, string, string];
+// 예시 단어: [표기, 읽기, 영어 뜻, 한국어 뜻(없으면 "")]. 팝업을 열 때 그 한자들만 서버에서 받아 브라우저 메모리에 둔다.
+type Word = [string, string, string, string?];
 const exCache = new Map<string, Word[]>();
 const exPending = new Map<string, Promise<void>>();
 
@@ -128,6 +132,7 @@ export default function Furigana({ text: rawText, enabled = true }: { text: stri
   });
   const [tip, setTip] = useState<Tip | null>(null);
   const [kindsOff] = usePopupKinds();
+  const [opts] = usePopupOptions();
   const [exTick, setExTick] = useState(0); // 예시 단어가 도착하면 팝업을 다시 그리고 위치를 다시 잡는다.
   const tipRef = useRef<HTMLDivElement>(null);
 
@@ -223,30 +228,34 @@ export default function Furigana({ text: rawText, enabled = true }: { text: stri
             onClick={(e) => e.stopPropagation()}
           >
             {tip.tok.r ? (
-              <div className="furi-read">{tip.tok.r}</div>
+              <div className="furi-read">
+                {tip.tok.r}
+                {opts.ko && tip.tok.m && <span className="furi-word-ko"> {tip.tok.m}</span>}
+              </div>
             ) : (
               <div className="furi-read">
                 {tip.tok.b ?? tip.tok.s}
                 {tip.tok.w?.k && <span className="furi-word-kanji"> 【{tip.tok.w.k}】</span>}
+                {opts.jlpt && tip.tok.w?.n && <span className="furi-jlpt">{jlptLabel(tip.tok.w.n)}</span>}
               </div>
             )}
             {tip.tok.w && (
               <div className="furi-kanji">
-                {tip.tok.w.ko && <div className="furi-hangul">{tip.tok.w.ko}</div>}
-                <div className="furi-en">{tip.tok.w.e}</div>
+                {opts.ko && tip.tok.w.ko ? <div className="furi-hangul">{tip.tok.w.ko}</div> : <div className="furi-en">{tip.tok.w.e}</div>}
               </div>
             )}
             {(tip.tok.k ?? []).map((k) => (
               <div key={k.c} className="furi-kanji">
                 <div>
                   <b>{k.c}</b> {k.h && <span className="furi-hangul">{k.h}</span>}
+                  {opts.jlpt && k.n && <span className="furi-jlpt">{jlptLabel(k.n)}</span>}
                   {k.j && <span> · {k.j}</span>}
-                  {k.e && <span className="furi-en"> · {k.e}</span>}
+                  {opts.ko && k.m ? <span> · {k.m}</span> : k.e && <span className="furi-en"> · {k.e}</span>}
                 </div>
-                {(exCache.get(k.c) ?? []).slice(0, MAX_EXAMPLES).map(([w, r, g]) => (
+                {(exCache.get(k.c) ?? []).slice(0, MAX_EXAMPLES).map(([w, r, g, ko]) => (
                   <div key={w} className="furi-ex">
                     <span className="furi-ex-w">{w}</span> <span>{r}</span>
-                    <span className="furi-en"> · {g}</span>
+                    {opts.ko && ko ? <span> · {ko}</span> : <span className="furi-en"> · {g}</span>}
                   </div>
                 ))}
               </div>

@@ -8,6 +8,7 @@ import BottomNav from "@/components/BottomNav";
 import PageTransition from "@/components/PageTransition";
 import TourOverlay from "@/components/TourOverlay";
 import WordListUpdatedAt from "@/components/WordListUpdatedAt";
+import OfflineManager from "@/components/OfflineManager";
 
 const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <FocusModeProvider>
             <TourProvider>
               <WordListUpdatedAt />
+              <OfflineManager />
               <main className="flex-1 pb-24">
                 <PageTransition>{children}</PageTransition>
               </main>

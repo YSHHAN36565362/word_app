@@ -134,6 +134,9 @@ function pick(w, kinds, data) {
     // 한국어 뜻: 표제어가 이 가나 그대로이거나, 사전의 한자 표기와 같은 단어장 항목만 쓴다(동음이의어 방지).
     const ko = (korean.get(w) ?? []).find((x) => x.head === w || forms.includes(x.head));
     if (ko) out.ko = ko.ko;
+    // JLPT 급수: 여러 개면 가장 쉬운 급수(숫자가 큰 쪽)
+    const levels = (d.jlpt ?? []).map((x) => Number(/n(\d)$/.exec(x)?.[1])).filter(Boolean);
+    if (levels.length) out.n = Math.max(...levels);
     return out;
   }
   return null;

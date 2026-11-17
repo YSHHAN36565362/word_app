@@ -3,6 +3,9 @@ import path from "node:path";
 import kuromoji from "kuromoji";
 import kanjiData from "@/data/kanji.json";
 import kanaWords from "@/data/kana-words.json";
+import kanjiJlpt from "@/data/kanji-jlpt.json";
+import koKanji from "@/data/ko-kanji.json";
+import koWords from "@/data/ko-words.json";
 import type { PopupKind } from "@/lib/popupKinds";
 
 export const runtime = "nodejs";
@@ -34,13 +37,16 @@ interface KanjiInfo {
   h: string; // 한국 한자음
   j: string; // 일본 음독·훈독
   e: string; // 영어 뜻
+  m?: string; // 한국어 뜻(훈)
+  n?: number; // JLPT 급수(N5=5 … N1=1)
 }
 
 // 한자 없이 쓰인 단어의 뜻(scripts/build-kana-words.mjs 가 만든 데이터)
 interface KanaWord {
   e: string; // 영어 뜻
   k?: string; // 한자 표기
-  ko?: string; // 한국어 뜻(단어장에 실려 있을 때)
+  ko?: string; // 한국어 뜻
+  n?: number; // JLPT 급수(N5=5 … N1=1)
 }
 
 interface Token {
@@ -50,9 +56,13 @@ interface Token {
   c?: PopupKind; // 팝업 종류(팝업이 뜨는 조각에만)
   b?: string; // 기본형(가나 단어: できれば → できる)
   w?: KanaWord; // 가나 단어의 뜻
+  m?: string; // 한자 단어 전체의 한국어 뜻(있을 때)
 }
 
 const KANA_WORDS = kanaWords as Record<string, KanaWord>;
+const KANJI_JLPT = kanjiJlpt as Record<string, number>;
+const KO_KANJI = koKanji as Record<string, string>;
+const KO_WORDS = koWords as Record<string, string>; // 단어(기본형 표기) → 한국어 뜻
 const KATA_ONLY = /^[ァ-ヶー]+$/;
 
 // 형태소의 품사 → 가나 단어 팝업 종류. scripts/build-kana-words.mjs 의 kindOf 와 같은 규칙이어야 한다.
@@ -67,14 +77,16 @@ function kindOf(t: kuromoji.IpadicFeatures, word: string): PopupKind | null {
 
 function toToken(t: kuromoji.IpadicFeatures): Token {
   const s = t.surface_form;
+  const base = t.basic_form && t.basic_form !== "*" ? t.basic_form : s;
   if (KANJI.test(s)) {
     const reading = t.reading && t.reading !== "*" ? t.reading : "";
-    return reading ? { s, r: kataToHira(reading), k: kanjiInfoOf(s), c: "kanji" } : { s, r: null };
+    return reading ? { s, r: kataToHira(reading), k: kanjiInfoOf(s), c: "kanji", m: KO_WORDS[base] } : { s, r: null };
   }
-  const base = t.basic_form && t.basic_form !== "*" ? t.basic_form : s;
   const kind = kindOf(t, base);
   const w = kind ? KANA_WORDS[base] : undefined;
-  return kind && w ? { s, r: null, c: kind, b: base, w } : { s, r: null };
+  if (!kind || !w) return { s, r: null };
+  const ko = w.ko ?? KO_WORDS[base];
+  return { s, r: null, c: kind, b: base, w: ko ? { ...w, ko } : w };
 }
 
 const KANJI_DATA = kanjiData as Record<string, { h: string; j: string; e: string }>;
@@ -86,7 +98,7 @@ function kanjiInfoOf(surface: string): KanjiInfo[] {
     if (!KANJI.test(c) || seen.has(c)) continue;
     seen.add(c);
     const d = KANJI_DATA[c];
-    if (d) out.push({ c, h: d.h, j: d.j, e: d.e });
+    if (d) out.push({ c, h: d.h, j: d.j, e: d.e, m: KO_KANJI[c], n: KANJI_JLPT[c] });
   }
   return out;
 }

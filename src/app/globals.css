@@ -391,6 +391,24 @@ details[open] > summary .details-chevron {
   font-weight: 600;
   opacity: 0.8;
 }
+.furi-word-ko {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+/* JLPT 급수 배지 */
+.furi-jlpt {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  opacity: 0.8;
+  vertical-align: 1px;
+}
 .furi-hangul {
   font-weight: 700;
 }
